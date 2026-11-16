@@ -243,8 +243,11 @@ const avgOf = t => t.birds ? netKg(t) / t.birds : 0;
 const tone = n => n < 0 ? 'text-bad' : 'text-good';
 
 /* ---------------- Data ---------------- */
-const DB = {users: [], suppliers: [], customers: [], purchases: [], sales: [], expenses: [], monthly: [], journal: [], payments: []};
-const EXP_CATS = ['Labour', 'Diesel / Fuel', 'Loading & Unloading', 'Tea & Food', 'Vehicle Repair', 'Ice & Water', 'Other'];
+const DB = {users: [], suppliers: [], customers: [], purchases: [], sales: [], expenses: [], monthly: [], journal: [], payments: [], employees: [], vehicles: [], advances: []};
+const EXP_CATS = ['Wages', 'Diesel / Fuel', 'Vehicle Repair', 'Vehicle Rent', 'Loading & Unloading', 'Tea & Food', 'Ice & Water', 'Other'];
+const EXP_LINK = {'Wages': 'employee', 'Diesel / Fuel': 'vehicle', 'Vehicle Repair': 'vehicle', 'Vehicle Rent': 'vehicle'};   // category → which master it is entered against
+const DESIGNATIONS = ['Driver', 'Loader', 'Helper', 'Supervisor', 'Accountant', 'Other'];
+const VEH_TYPES = ['Pickup', 'Mini truck', 'Truck', 'Two-wheeler', 'Other'];
 const MON_CATS = ['Shop Rent', 'Staff Salary', 'Electricity', 'Phone & Internet', 'Accountant Fee', 'Shop Maintenance', 'Other'];
 const J_REASONS = ['Bird mortality', 'Weight shortage', 'Rate difference', 'Quality issue', 'Other'];
 
@@ -275,6 +278,20 @@ function seed() {
     {id: 'c6', name: 'City Chicken Centre', phone: '9846200006', place: 'Mavoor Road', opening: 0},
   ];
   const staff = ['Salim K', 'Nizar P', 'Rahath Ali'];
+  DB.employees = [
+    {id: 'e1', name: 'Salim K', designation: 'Supervisor', phone: '9895011122', wageType: 'Monthly', wage: 18000, opening: 0, active: true},
+    {id: 'e2', name: 'Nizar P', designation: 'Driver', phone: '9746033344', wageType: 'Daily', wage: 900, opening: 0, active: true},
+    {id: 'e3', name: 'Shameer V', designation: 'Driver', phone: '9605055566', wageType: 'Daily', wage: 850, opening: 0, active: true},
+    {id: 'e4', name: 'Rafeeq M', designation: 'Loader', phone: '9947012233', wageType: 'Daily', wage: 700, opening: 0, active: true},
+    {id: 'e5', name: 'Basheer T', designation: 'Loader', phone: '9847455667', wageType: 'Daily', wage: 700, opening: 1000, active: true},
+    {id: 'e6', name: 'Anwar C', designation: 'Helper', phone: '9562078899', wageType: 'Daily', wage: 600, opening: 0, active: true},
+  ];
+  DB.vehicles = [
+    {id: 'v1', number: 'KL-10-AB-4521', type: 'Mini truck', ownership: 'Own', ownerName: '', driverId: 'e2', active: true},
+    {id: 'v2', number: 'KL-11-Q-7788', type: 'Pickup', ownership: 'Own', ownerName: '', driverId: 'e3', active: true},
+    {id: 'v3', number: 'KL-55-C-1290', type: 'Truck', ownership: 'Hired', ownerName: 'Malappuram Transports', driverId: '', active: true},
+  ];
+  const ADV = {'2026-10-05': ['e4', 3000, 'Medical'], '2026-10-12': ['e2', 5000, 'Family function'], '2026-10-26': ['e6', 2000, ''], '2026-11-04': ['e3', 4000, 'House rent'], '2026-11-10': ['e4', 1500, '']};
   let carry = 0;
   for (let d = '2026-10-01'; d <= TODAY; d = addDays(d, 1)) {
     const isToday = d === TODAY;
@@ -284,7 +301,7 @@ function seed() {
     sups.forEach((s, i) => {
       const birds = i === sups.length - 1 ? left : Math.round(B * rnd(.4, .6)); left -= birds;
       const net = h(birds * avg * rnd(.985, 1.015));
-      const p = {id: uid(), date: d, partyId: s.id, birds, w1: h(net * rnd(1.008, 1.02)), w2: net, rate: prate + ri(-1, 1), by: pick(staff), narration: r() < .5 ? `Vehicle KL-${ri(10, 65)}-${pick(['A', 'B', 'C', 'D'])}-${ri(1000, 9999)}` : ''};
+      const p = {id: uid(), date: d, partyId: s.id, birds, w1: h(net * rnd(1.008, 1.02)), w2: net, rate: prate + ri(-1, 1), by: pick(staff), vehicleId: pick(['v1', 'v1', 'v3']), narration: r() < .4 ? pick(['Morning load', 'Night load', 'Farm pickup', 'Second load']) : ''};
       DB.purchases.push(p); pAmt += amtOf(p);
       const payOn = addDays(d, ri(1, 2));
       if (payOn <= TODAY && r() < .8) DB.payments.push({id: uid(), date: payOn, partyType: 'supplier', partyId: s.id, amount: Math.round(amtOf(p) * rnd(.8, 1) / 1000) * 1000, mode: pick(['Bank', 'UPI', 'Bank']), note: ''});
@@ -300,7 +317,9 @@ function seed() {
     custs.forEach((c, i) => {
       const birds = i === custs.length - 1 ? rem : Math.floor(sold * w[i] / ws); rem -= birds;
       const net = h(birds * saleAvg * rnd(.99, 1.01));
-      const s = {id: uid(), date: d, partyId: c.id, birds, w1: h(net * rnd(1.003, 1.012)), w2: net, rate: srate + ri(-2, 2), by: pick(staff), narration: r() < .35 ? pick(['Morning delivery', 'Evening delivery', 'Delivered by Nizar', 'Collected at yard', 'Second trip']) : ''};
+      const s = {id: uid(), date: d, partyId: c.id, birds, w1: h(net * rnd(1.003, 1.012)), w2: net, rate: srate + ri(-2, 2), by: pick(staff), vehicleId: '', narration: ''};
+      if (r() < .7) s.vehicleId = pick(['v2', 'v2', 'v1']); else s.narration = 'Collected at yard';
+      if (s.vehicleId && r() < .3) s.narration = pick(['Morning delivery', 'Evening delivery', 'Second trip']);
       DB.sales.push(s);
       const rec = addDays(d, 1);
       if (rec <= TODAY && r() < .85) DB.payments.push({id: uid(), date: rec, partyType: 'customer', partyId: c.id, amount: Math.round(amtOf(s) * rnd(.82, 1) / 100) * 100, mode: pick(['Cash', 'UPI', 'Cash', 'Bank']), note: ''});
@@ -313,10 +332,19 @@ function seed() {
       else { j.reason = 'Rate difference'; j.amount = ri(30, 80) * 10; }
       DB.journal.push(j);
     }
-    const ex = [['Labour', ri(12, 16) * 100], ['Diesel / Fuel', ri(18, 26) * 100], ['Loading & Unloading', ri(4, 7) * 100], ['Tea & Food', ri(15, 35) * 10]];
-    if (r() < .12) ex.push(['Vehicle Repair', ri(8, 25) * 100]);
-    if (r() < .2) ex.push(['Ice & Water', ri(10, 30) * 10]);
-    ex.forEach(([cat, amount]) => DB.expenses.push({id: uid(), date: d, category: cat, amount, mode: cat === 'Diesel / Fuel' ? 'UPI' : 'Cash', note: '', by: pick(staff)}));
+    if (ADV[d]) DB.advances.push({id: uid(), date: d, type: 'given', employeeId: ADV[d][0], amount: ADV[d][1], mode: 'Cash', note: ADV[d][2]});
+    const ex = [];
+    DB.employees.filter(e => e.wageType === 'Daily').forEach(e => {
+      if (r() > .9) return;                                         // day off
+      const bal = empAdvance(e.id, d), ded = bal > 0 && r() < .75 ? Math.min(bal, ri(2, 4) * 100) : 0;
+      ex.push({category: 'Wages', amount: e.wage, employeeId: e.id, advDeduct: ded});
+    });
+    const usedV = [...new Set([...DB.purchases, ...DB.sales].filter(x => x.date === d && x.vehicleId).map(x => x.vehicleId))];
+    usedV.forEach(v => { if (vehOf(v).ownership === 'Own') ex.push({category: 'Diesel / Fuel', amount: ri(v === 'v1' ? 14 : 6, v === 'v1' ? 20 : 10) * 100, vehicleId: v}); else ex.push({category: 'Vehicle Rent', amount: ri(25, 32) * 100, vehicleId: v, note: 'Hire charge'}); });
+    if (r() < .1) ex.push({category: 'Vehicle Repair', amount: ri(8, 25) * 100, vehicleId: pick(['v1', 'v2']), note: pick(['Tyre puncture', 'Oil change', 'Brake work', 'Battery'])});
+    ex.push({category: 'Loading & Unloading', amount: ri(4, 7) * 100}, {category: 'Tea & Food', amount: ri(15, 35) * 10});
+    if (r() < .2) ex.push({category: 'Ice & Water', amount: ri(10, 30) * 10});
+    ex.forEach(x => DB.expenses.push({id: uid(), date: d, mode: x.category === 'Diesel / Fuel' ? 'UPI' : 'Cash', note: '', by: pick(staff), employeeId: '', vehicleId: '', advDeduct: 0, ...x}));
     if (['03', '10', '17', '24', '31'].includes(d.slice(8))) {   // weekly settlement keeps balances realistic
       DB.customers.forEach(c => { const b = partyBalance('customer', c.id, d) - sum(DB.sales.filter(x => x.partyId === c.id && x.date === d), amtOf); const keep = ri(5, 35) * 1000; if (b > keep) DB.payments.push({id: uid(), date: d, partyType: 'customer', partyId: c.id, amount: Math.round((b - keep) / 100) * 100, mode: 'Bank', note: 'Weekly settlement'}); });
       DB.suppliers.forEach(s => { const b = partyBalance('supplier', s.id, d) - sum(DB.purchases.filter(x => x.partyId === s.id && x.date >= addDays(d, -1)), amtOf); const keep = ri(20, 60) * 1000; if (b > keep) DB.payments.push({id: uid(), date: d, partyType: 'supplier', partyId: s.id, amount: Math.round((b - keep) / 1000) * 1000, mode: 'Bank', note: 'Weekly settlement'}); });
@@ -377,9 +405,9 @@ function ledger(t, id) {
 
 /* ---------------- App state & navigation ---------------- */
 const state = {
-  user: null, page: 'dashboard', stmt: null,
-  f: {pDate: TODAY, sDate: TODAY, eDate: TODAY, jFrom: addDays(TODAY, -6), jTo: TODAY, kFrom: addDays(TODAY, -6), kTo: TODAY, plDate: TODAY, plMonth: monthOf(TODAY), mMonth: monthOf(TODAY), cpFrom: monthOf(TODAY) + '-01', cpTo: TODAY},
-  q: {suppliers: '', customers: ''},
+  user: null, page: 'dashboard', stmt: null, est: null, vst: null,
+  f: {pDate: TODAY, sDate: TODAY, eDate: TODAY, jFrom: addDays(TODAY, -6), jTo: TODAY, kFrom: addDays(TODAY, -6), kTo: TODAY, plDate: TODAY, plMonth: monthOf(TODAY), mMonth: monthOf(TODAY), cpFrom: monthOf(TODAY) + '-01', cpTo: TODAY, aFrom: monthOf(TODAY) + '-01', aTo: TODAY},
+  q: {suppliers: '', customers: '', employees: '', vehicles: ''},
 };
 const NAV = [
   {id: 'dashboard', label: 'Dashboard', icon: 'grid-1x2', roles: ['owner'], grp: 'Overview'},
@@ -388,8 +416,11 @@ const NAV = [
   {id: 'expenses', label: 'Daily Expense', icon: 'wallet2', roles: ['owner', 'employee'], grp: 'Daily entry'},
   {id: 'journal', label: 'Journal', icon: 'journal-text', roles: ['owner'], grp: 'Daily entry'},
   {id: 'stock', label: 'Pending Stock', icon: 'box-seam', roles: ['owner'], grp: 'Daily entry'},
+  {id: 'advances', label: 'Employee Advance', icon: 'cash-coin', roles: ['owner'], grp: 'Daily entry'},
   {id: 'suppliers', label: 'Suppliers', icon: 'building', roles: ['owner'], grp: 'Parties'},
   {id: 'customers', label: 'Customers', icon: 'people', roles: ['owner'], grp: 'Parties'},
+  {id: 'employees', label: 'Employees', icon: 'person-badge', roles: ['owner'], grp: 'Masters'},
+  {id: 'vehicles', label: 'Vehicles', icon: 'truck-front', roles: ['owner'], grp: 'Masters'},
   {id: 'monthly', label: 'Monthly Expense', icon: 'calendar3', roles: ['owner'], grp: 'Accounts'},
   {id: 'pl-daily', label: 'Daily P&L', icon: 'graph-up-arrow', roles: ['owner'], grp: 'Reports'},
   {id: 'pl-monthly', label: 'Monthly P&L', icon: 'bar-chart-line', roles: ['owner'], grp: 'Reports'},
@@ -410,9 +441,11 @@ function render() {
   if (!state.user) { qs('#loginView').classList.remove('d-none'); qs('#appView').classList.add('d-none'); return; }
   qs('#loginView').classList.add('d-none'); qs('#appView').classList.remove('d-none');
   const role = state.user.role, items = navFor(role);
-  const allowed = items.map(n => n.id).concat(role === 'owner' ? ['statement'] : [], ['form']);
+  const allowed = items.map(n => n.id).concat(role === 'owner' ? ['statement', 'emp-statement', 'veh-statement'] : [], ['form']);
   if (!allowed.includes(state.page)) state.page = role === 'owner' ? 'dashboard' : 'sales';
   if (state.page === 'statement' && !state.stmt) state.page = 'customers';
+  if (state.page === 'emp-statement' && !state.est) state.page = 'employees';
+  if (state.page === 'veh-statement' && !state.vst) state.page = 'vehicles';
   if (state.page === 'form' && !state.formCfg) state.page = state.formBack || (role === 'owner' ? 'dashboard' : 'sales');
 
   // Sidebar
@@ -420,7 +453,7 @@ function render() {
   items.forEach(n => {
     if (n.grp !== grp) { grp = n.grp; sb += `<div class="grp">${grp}</div>`; }
     const pg = state.page === 'form' ? state.formBack : state.page;
-    const act = pg === n.id || (pg === 'statement' && n.id === (state.stmt?.type === 'supplier' ? 'suppliers' : 'customers'));
+    const act = pg === n.id || (pg === 'statement' && n.id === (state.stmt?.type === 'supplier' ? 'suppliers' : 'customers')) || (pg === 'emp-statement' && n.id === 'employees') || (pg === 'veh-statement' && n.id === 'vehicles');
     sb += `<a href="#${n.id}" data-nav="${n.id}" class="${act ? 'active' : ''}"><i class="bi bi-${n.icon}"></i>${n.label}</a>`;
   });
   qs('#sidebar').innerHTML = sb + '<div style="height:20px"></div>';
@@ -434,7 +467,7 @@ function render() {
 
   // Top bar
   const cur = NAV.find(n => n.id === state.page);
-  qs('#topTitle').textContent = state.page === 'form' ? state.formCfg.title : cur ? cur.label : 'Party Statement';
+  qs('#topTitle').textContent = state.page === 'form' ? state.formCfg.title : cur ? cur.label : ({'emp-statement': 'Employee Statement', 'veh-statement': 'Vehicle Statement'}[state.page] || 'Party Statement');
   qs('#topDate').textContent = dLong(TODAY);
   qs('#uName').textContent = state.user.name; qs('#uRole').textContent = role === 'owner' ? 'Owner' : 'Employee';
   qs('#uAvatar').textContent = state.user.name.split(' ').map(x => x[0]).join('').slice(0, 2);
@@ -445,7 +478,7 @@ function render() {
   if (state.page === 'form') initForm();
 
   // FAB
-  const fabMap = {purchase: ['new-purchase'], sales: ['new-sale'], expenses: ['new-expense'], journal: ['new-journal'], monthly: ['new-monthly'], suppliers: ['new-party', 'supplier'], customers: ['new-party', 'customer'], users: ['new-user'], statement: ['pay']};
+  const fabMap = {purchase: ['new-purchase'], sales: ['new-sale'], expenses: ['new-expense'], journal: ['new-journal'], monthly: ['new-monthly'], suppliers: ['new-party', 'supplier'], customers: ['new-party', 'customer'], users: ['new-user'], statement: ['pay'], employees: ['new-employee'], vehicles: ['new-vehicle'], advances: ['new-advance', 'given'], 'emp-statement': ['new-advance', 'given'], 'veh-statement': ['new-expense', 'vehicle']};
   const fab = qs('#fab'), fm = fabMap[state.page];
   if (fm) { fab.classList.remove('d-none'); fab.dataset.action = fm[0]; fab.dataset.type = fm[1] || ''; }
   else fab.classList.add('d-none');
@@ -550,6 +583,7 @@ function txnPage(kind) {
   const canEdit = isOwner() || d === TODAY, canDel = isOwner();
   const cols = [
     {h: isP ? 'Supplier' : 'Customer', card: 'title', v: r => `<span class="fw-semibold">${esc(partyName(pt, r.partyId))}</span>`},
+    {h: 'Vehicle', v: r => r.vehicleId ? `<span class="text-nowrap">${esc(vehName(r.vehicleId))}</span>` : '—'},
     {h: 'Narration', card: 'sub', v: r => r.narration ? `<span class="text-muted small text-wrap d-inline-block" style="max-width:220px"><i class="bi bi-chat-left-text me-1"></i>${esc(r.narration)}</span>` : '<span class="text-muted small d-none d-md-inline">—</span>'},
     {h: 'Birds', end: 1, v: r => num(r.birds, 0), tf: num(tb, 0)},
     {h: '1st Wt (kg)', mh: '1st Wt', end: 1, v: r => num(r.w1), tf: num(sum(list, x => x.w1))},
@@ -579,7 +613,8 @@ PAGES.expenses = () => {
   const byCat = EXP_CATS.map(c => [c, sum(list.filter(e => e.category === c), e => e.amount)]).filter(x => x[1]);
   const cols = [
     {h: 'Category', card: 'title', v: r => `<span class="fw-semibold">${esc(r.category)}</span>`},
-    {h: 'Note', card: 'sub', v: r => esc(r.note || '—')},
+    {h: 'Employee / Vehicle', card: 'sub', v: r => [r.employeeId ? `<i class="bi bi-person me-1"></i>${esc(empName(r.employeeId))}` : '', r.vehicleId ? `<i class="bi bi-truck-front me-1"></i>${esc(vehName(r.vehicleId))}` : '', r.advDeduct ? `<span class="badge-soft b-amber">${inr(r.advDeduct)} from advance</span>` : ''].filter(Boolean).join(' · ') || '<span class="text-muted">—</span>'},
+    {h: 'Note', v: r => esc(r.note || '—')},
     {h: 'Mode', v: r => `<span class="badge-soft b-gray">${r.mode}</span>`},
     {h: 'Entered by', v: r => esc(r.by || '')},
     {h: 'Amount', card: 'amount', end: 1, v: r => `<b>${inr(r.amount)}</b>`, tf: inr(tot)},
@@ -834,6 +869,164 @@ PAGES.users = () => {
     + dataView(cols, DB.users);
 };
 
+/* ---------------- Masters: Employees & Vehicles ---------------- */
+const empOf = id => DB.employees.find(e => e.id === id);
+const vehOf = id => DB.vehicles.find(v => v.id === id);
+const empName = id => (empOf(id) || {}).name || '—';
+const vehName = id => (vehOf(id) || {}).number || '—';
+const wageText = e => e.wageType === 'Daily' ? `${inr(e.wage)}/day` : `${inr(e.wage)}/month`;
+/* All advance movements: advances given / recovered in cash + deductions taken from wage entries */
+function advEntries() {
+  return [
+    ...DB.advances.map(a => ({...a, src: 'adv'})),
+    ...DB.expenses.filter(e => e.category === 'Wages' && e.advDeduct > 0).map(e => ({id: e.id, date: e.date, employeeId: e.employeeId, type: 'recovered', amount: e.advDeduct, mode: 'Wage deduction', note: e.note || '', src: 'exp'})),
+  ];
+}
+function empAdvance(id, upto = TODAY) {
+  const e = empOf(id), L = advEntries().filter(a => a.employeeId === id && a.date <= upto);
+  return (e?.opening || 0) + sum(L.filter(a => a.type === 'given'), a => a.amount) - sum(L.filter(a => a.type === 'recovered'), a => a.amount);
+}
+const activeOpts = (list, cur, label) => list.filter(x => x.active || x.id === cur).map(x => [x.id, label(x)]);
+
+PAGES.employees = () => {
+  const q = state.q.employees.toLowerCase(), ym = monthOf(TODAY);
+  const list = DB.employees.filter(e => !q || (e.name + e.designation + e.phone).toLowerCase().includes(q))
+    .map(e => ({...e, adv: empAdvance(e.id), mWages: sum(DB.expenses.filter(x => x.category === 'Wages' && x.employeeId === e.id && x.date.startsWith(ym)), x => x.amount)}));
+  const tAdv = sum(list, e => e.adv);
+  const cols = [
+    {h: 'Name', card: 'title', v: r => `<a href="#" class="link" data-action="est" data-id="${r.id}">${esc(r.name)}</a>${r.active ? '' : ' <span class="badge-soft b-out">Inactive</span>'}`},
+    {h: 'Designation', card: 'sub', v: r => `${esc(r.designation)} · <span class="text-nowrap">${esc(r.phone)}</span>`},
+    {h: 'Wage', end: 1, v: r => wageText(r)},
+    {h: 'Wages this month', mh: 'Wages (month)', end: 1, v: r => inr(r.mWages), tf: inr(sum(list, e => e.mWages))},
+    {h: 'Advance balance', card: 'amount', end: 1, v: r => `<b class="${r.adv > 0 ? 'text-bad' : ''}">${inr(r.adv)}</b>`, tf: inr(tAdv)},
+    {h: '', card: 'actions', v: r => `<div class="text-end text-nowrap"><button class="btn btn-sm btn-soft" data-action="est" data-id="${r.id}">Statement</button> <button class="btn btn-sm btn-light border" data-action="new-advance" data-type="given" data-id="${r.id}">Advance</button> <button class="icon-btn" data-action="edit" data-type="employee" data-id="${r.id}"><i class="bi bi-pencil"></i></button></div>`,
+      mv: r => `<div class="m-actions"><button class="btn btn-sm btn-soft" data-action="est" data-id="${r.id}"><i class="bi bi-file-text me-1"></i>Statement</button><button class="btn btn-sm btn-light border" data-action="new-advance" data-type="given" data-id="${r.id}"><i class="bi bi-cash-coin me-1"></i>Advance</button><button class="btn btn-sm btn-light border" style="flex:0 0 44px" data-action="edit" data-type="employee" data-id="${r.id}"><i class="bi bi-pencil"></i></button></div>`},
+  ];
+  return head('Employees', `${DB.employees.filter(e => e.active).length} active · advance outstanding ${inr(sum(DB.employees, e => empAdvance(e.id)))}`, addBtn('new-employee', 'Add employee'))
+    + `<div class="filters"><div class="searchbox"><i class="bi bi-search"></i><input class="form-control" placeholder="Search name, designation, phone" data-search="employees" value="${esc(state.q.employees)}"></div></div>`
+    + dataView(cols, list, {foot: true, emptyMsg: 'No matching employees.', emptyIcon: 'person-badge'})
+    + `<div class="note mt-3"><i class="bi bi-info-circle me-1"></i>Employees here are workers (drivers, loaders, helpers). App logins are managed separately under <a href="#users" data-nav="users" class="link">Users</a>.</div>`;
+};
+
+function vehStats(id, from, to) {
+  const inR = x => x.date >= from && x.date <= to;
+  const exps = DB.expenses.filter(x => x.vehicleId === id && inR(x));
+  const loads = DB.purchases.filter(x => x.vehicleId === id && inR(x)), drops = DB.sales.filter(x => x.vehicleId === id && inR(x));
+  return {exps, loads, drops, exp: sum(exps, x => x.amount), kg: sum(loads, netKg) + sum(drops, netKg)};
+}
+PAGES.vehicles = () => {
+  const q = state.q.vehicles.toLowerCase(), from = monthOf(TODAY) + '-01';
+  const list = DB.vehicles.filter(v => !q || (v.number + v.type + v.ownership + empName(v.driverId)).toLowerCase().includes(q)).map(v => ({...v, s: vehStats(v.id, from, TODAY)}));
+  const cols = [
+    {h: 'Vehicle', card: 'title', v: r => `<a href="#" class="link" data-action="vst" data-id="${r.id}">${esc(r.number)}</a>${r.active ? '' : ' <span class="badge-soft b-out">Inactive</span>'}`},
+    {h: 'Details', card: 'sub', v: r => `${esc(r.type)} · <span class="badge-soft ${r.ownership === 'Own' ? 'b-in' : 'b-amber'}">${r.ownership}</span>${r.driverId ? ' · ' + esc(empName(r.driverId)) : ''}${r.ownership === 'Hired' && r.ownerName ? ' · ' + esc(r.ownerName) : ''}`},
+    {h: 'Loads (month)', mh: 'Loads', end: 1, v: r => r.s.loads.length},
+    {h: 'Deliveries (month)', mh: 'Deliveries', end: 1, v: r => r.s.drops.length},
+    {h: 'Kg moved (month)', mh: 'Kg moved', end: 1, v: r => num(r.s.kg, 0)},
+    {h: 'Expense (month)', card: 'amount', end: 1, v: r => `<b>${inr(r.s.exp)}</b>`, tf: inr(sum(list, v => v.s.exp))},
+    {h: '', card: 'actions', v: r => `<div class="text-end text-nowrap"><button class="btn btn-sm btn-soft" data-action="vst" data-id="${r.id}">Statement</button> <button class="icon-btn" data-action="edit" data-type="vehicle" data-id="${r.id}"><i class="bi bi-pencil"></i></button></div>`,
+      mv: r => `<div class="m-actions"><button class="btn btn-sm btn-soft" data-action="vst" data-id="${r.id}"><i class="bi bi-file-text me-1"></i>Statement</button><button class="btn btn-sm btn-light border" data-action="edit" data-type="vehicle" data-id="${r.id}"><i class="bi bi-pencil me-1"></i>Edit</button></div>`},
+  ];
+  return head('Vehicles', `${DB.vehicles.filter(v => v.active).length} active · figures for ${mLong(monthOf(TODAY))}`, addBtn('new-vehicle', 'Add vehicle'))
+    + `<div class="filters"><div class="searchbox"><i class="bi bi-search"></i><input class="form-control" placeholder="Search number, type, driver" data-search="vehicles" value="${esc(state.q.vehicles)}"></div></div>`
+    + dataView(cols, list, {foot: true, emptyMsg: 'No matching vehicles.', emptyIcon: 'truck-front'});
+};
+
+PAGES.advances = () => {
+  const {aFrom: f, aTo: t} = state.f;
+  const list = advEntries().filter(a => a.date >= f && a.date <= t).sort((a, b) => b.date.localeCompare(a.date));
+  const given = sum(list.filter(a => a.type === 'given'), a => a.amount), rec = sum(list.filter(a => a.type === 'recovered'), a => a.amount);
+  const due = DB.employees.map(e => ({e, b: empAdvance(e.id)})).filter(x => x.b > 0).sort((a, b) => b.b - a.b);
+  const cols = [
+    {h: 'Date', tableOnly: true, v: r => dShort(r.date)},
+    {h: 'Employee', card: 'title', v: r => `<a href="#" class="link" data-action="est" data-id="${r.employeeId}">${esc(empName(r.employeeId))}</a>`},
+    {h: 'Type', card: 'sub', v: r => (r.type === 'given' ? '<span class="badge-soft b-out">Advance given</span>' : '<span class="badge-soft b-in">Recovered</span>') + `<span class="d-md-none text-muted"> · ${dShort(r.date)}</span>`},
+    {h: 'Mode', v: r => esc(r.mode)},
+    {h: 'Note', v: r => esc(r.note || '—')},
+    {h: 'Amount', card: 'amount', end: 1, v: r => `<b class="${r.type === 'given' ? 'text-bad' : 'text-good'}">${r.type === 'given' ? '+' : '−'}${inr(r.amount)}</b>`},
+    {h: '', card: 'actions', v: r => r.src === 'adv' ? actBtns('advance', r.id) : `<div class="text-end"><button class="btn btn-sm btn-light border" data-action="edit" data-type="expense" data-id="${r.id}">Wage entry</button></div>`,
+      mv: r => r.src === 'adv' ? mActs('advance', r.id) : `<div class="m-actions"><button class="btn btn-sm btn-light border" data-action="edit" data-type="expense" data-id="${r.id}"><i class="bi bi-pencil me-1"></i>Edit wage entry</button></div>`},
+  ];
+  return head('Employee Advance', 'Advances given to employees and their recovery', `${addBtn('new-advance', 'Give advance', 'data-type="given"')}<button class="btn btn-light border d-none d-md-inline-flex align-items-center gap-1" data-action="new-advance" data-type="recovered"><i class="bi bi-arrow-down-left"></i>Recover</button>`)
+    + rangeNav('aFrom', 'aTo')
+    + `<div class="row g-2 mb-3">
+       <div class="col-6 col-md-3">${stat('Given', `<span class="text-bad">${inr(given)}</span>`, 'in this period', 'arrow-up-right')}</div>
+       <div class="col-6 col-md-3">${stat('Recovered', `<span class="text-good">${inr(rec)}</span>`, 'cash + wage deductions', 'arrow-down-left')}</div>
+       <div class="col-12 col-md-6">${stat('Outstanding now', inr(sum(due, x => x.b)), due.length ? due.map(x => `${esc(x.e.name.split(' ')[0])} ${inr(x.b)}`).join(' · ') : 'No advance pending', 'cash-coin', 'hero')}</div></div>`
+    + `<div class="d-flex gap-2 mb-3 d-md-none"><button class="btn btn-light border flex-fill" data-action="new-advance" data-type="recovered"><i class="bi bi-arrow-down-left me-1"></i>Recover advance</button></div>`
+    + dataView(cols, list, {emptyMsg: 'No advance entries in this period.', emptyIcon: 'cash-coin'})
+    + `<div class="note mt-3"><i class="bi bi-info-circle me-1"></i>Advances are not an expense — they are money the employee owes back. Recover in cash here, or deduct while entering the employee's <b>Wages</b> in Daily Expense.</div>`;
+};
+
+PAGES['emp-statement'] = () => {
+  const {id, from, to} = state.est, e = empOf(id);
+  const rows0 = [
+    ...DB.expenses.filter(x => x.category === 'Wages' && x.employeeId === id).map(x => ({date: x.date, kind: 'Wages', desc: (x.advDeduct ? `Cash ${inr(x.amount - x.advDeduct)} + ${inr(x.advDeduct)} from advance` : `Paid by ${x.mode}`) + (x.note ? ' · ' + x.note : ''), wage: x.amount, given: 0, rec: x.advDeduct || 0})),
+    ...DB.advances.filter(a => a.employeeId === id).map(a => ({date: a.date, kind: a.type === 'given' ? 'Advance' : 'Recovery', desc: a.mode + (a.note ? ' · ' + a.note : ''), wage: 0, given: a.type === 'given' ? a.amount : 0, rec: a.type === 'recovered' ? a.amount : 0})),
+  ].sort((a, b) => a.date.localeCompare(b.date) || ({Advance: 0, Wages: 1, Recovery: 2}[a.kind] - {Advance: 0, Wages: 1, Recovery: 2}[b.kind]));
+  const open = e.opening + sum(rows0.filter(r => r.date < from), r => r.given - r.rec);
+  let bal = open;
+  const rows = rows0.filter(r => r.date >= from && r.date <= to).map(r => ({...r, bal: (bal += r.given - r.rec)}));
+  const T = k => sum(rows, r => r[k]);
+  const badge = k => `<span class="badge-soft ${k === 'Wages' ? 'b-brand' : k === 'Advance' ? 'b-out' : 'b-in'}">${k}</span>`;
+  const cols = [
+    {h: 'Date', card: 'title', v: r => `<span class="fw-semibold">${dShort(r.date)}</span> <span class="d-md-none">${badge(r.kind)}</span>`},
+    {h: 'Type', tableOnly: true, v: r => badge(r.kind)},
+    {h: 'Particulars', card: 'sub', v: r => esc(r.desc)},
+    {h: 'Wages', end: 1, tableOnly: true, v: r => r.wage ? inr(r.wage) : '—', tf: inr(T('wage'))},
+    {h: 'Advance given', end: 1, tableOnly: true, v: r => r.given ? inr(r.given) : '—', tf: inr(T('given'))},
+    {h: 'Recovered', end: 1, v: r => r.rec ? `<span class="text-good">${inr(r.rec)}</span>` : '—', tf: inr(T('rec'))},
+    {h: 'Advance balance', mh: 'Adv. balance', end: 1, v: r => `<b>${inr(r.bal)}</b>`, tf: inr(bal)},
+    {h: 'Amount', card: 'amount', mobileOnly: true, v: r => r.wage ? inr(r.wage) : r.given ? `<span class="text-bad">+${inr(r.given)}</span>` : `<span class="text-good">−${inr(r.rec)}</span>`, tf: ''},
+  ];
+  const opts = DB.employees.map(x => `<option value="${x.id}" ${x.id === id ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
+  return `<a href="#employees" data-nav="employees" class="link small d-inline-block mb-2"><i class="bi bi-arrow-left"></i> Employees</a>`
+    + head(esc(e.name), `${esc(e.designation)} · ${esc(e.phone)} · ${wageText(e)}`, `<button class="btn btn-light border d-none d-md-inline-flex align-items-center gap-1" data-action="new-advance" data-type="recovered" data-id="${id}"><i class="bi bi-arrow-down-left"></i>Recover</button><button class="btn btn-brand d-none d-md-inline-flex" data-action="new-advance" data-type="given" data-id="${id}"><i class="bi bi-cash-coin me-1"></i>Give advance</button>`)
+    + `<div class="filters"><div style="flex:1;min-width:200px;max-width:300px"><label class="form-label">Employee</label><select class="form-select" data-est="id" style="max-width:none">${opts}</select></div>
+       <div><label class="form-label">From</label><input type="date" class="form-control" data-est="from" value="${from}" max="${TODAY}"></div>
+       <div><label class="form-label">To</label><input type="date" class="form-control" data-est="to" value="${to}" max="${TODAY}"></div></div>`
+    + `<div class="row g-2 mb-3">
+       <div class="col-6 col-md-3">${stat('Wages', inr(T('wage')), `${rows.filter(r => r.wage).length} days`, 'wallet2')}</div>
+       <div class="col-6 col-md-3">${stat('Advance given', inr(T('given')), 'opening ' + inr(open), 'arrow-up-right')}</div>
+       <div class="col-6 col-md-3">${stat('Recovered', inr(T('rec')), '', 'arrow-down-left')}</div>
+       <div class="col-6 col-md-3">${stat('Advance balance', inr(bal), dShort(to), '', 'hero')}</div></div>`
+    + `<div class="d-flex gap-2 mb-3 d-md-none"><button class="btn btn-light border flex-fill" data-action="new-advance" data-type="recovered" data-id="${id}"><i class="bi bi-arrow-down-left me-1"></i>Recover</button></div>`
+    + dataView(cols, rows, {foot: true, emptyMsg: 'No wages or advances in this period.', emptyIcon: 'file-text'});
+};
+
+PAGES['veh-statement'] = () => {
+  const {id, from, to} = state.vst, v = vehOf(id), s = vehStats(id, from, to);
+  const rows = [
+    ...s.exps.map(x => ({date: x.date, kind: x.category, desc: [x.note, 'Paid by ' + x.mode].filter(Boolean).join(' · '), kg: 0, exp: x.amount})),
+    ...s.loads.map(x => ({date: x.date, kind: 'Purchase load', desc: `${partyName('supplier', x.partyId)} · ${num(x.birds, 0)} birds`, kg: netKg(x), exp: 0})),
+    ...s.drops.map(x => ({date: x.date, kind: 'Delivery', desc: `${partyName('customer', x.partyId)} · ${num(x.birds, 0)} birds`, kg: netKg(x), exp: 0})),
+  ].sort((a, b) => a.date.localeCompare(b.date) || (a.exp ? 1 : 0) - (b.exp ? 1 : 0));
+  let run = 0; rows.forEach(r => r.run = (run += r.exp));
+  const byCat = [...new Set(s.exps.map(x => x.category))].map(c => [c, sum(s.exps.filter(x => x.category === c), x => x.amount)]);
+  const badge = k => `<span class="badge-soft ${k === 'Purchase load' ? 'b-brand' : k === 'Delivery' ? 'b-in' : 'b-out'}">${k}</span>`;
+  const cols = [
+    {h: 'Date', card: 'title', v: r => `<span class="fw-semibold">${dShort(r.date)}</span> <span class="d-md-none">${badge(r.kind)}</span>`},
+    {h: 'Type', tableOnly: true, v: r => badge(r.kind)},
+    {h: 'Particulars', card: 'sub', v: r => esc(r.desc)},
+    {h: 'Kg moved', end: 1, v: r => r.kg ? num(r.kg, 0) : '—', tf: num(s.kg, 0)},
+    {h: 'Expense', card: 'amount', end: 1, v: r => r.exp ? `<b>${inr(r.exp)}</b>` : '—', tf: inr(s.exp)},
+    {h: 'Running expense', mh: 'Running', end: 1, v: r => inr(r.run), tf: inr(s.exp)},
+  ];
+  const opts = DB.vehicles.map(x => `<option value="${x.id}" ${x.id === id ? 'selected' : ''}>${esc(x.number)}</option>`).join('');
+  return `<a href="#vehicles" data-nav="vehicles" class="link small d-inline-block mb-2"><i class="bi bi-arrow-left"></i> Vehicles</a>`
+    + head(esc(v.number), `${esc(v.type)} · ${v.ownership}${v.driverId ? ' · Driver ' + esc(empName(v.driverId)) : ''}`, `<button class="btn btn-brand d-none d-md-inline-flex" data-action="new-expense" data-type="vehicle" data-id="${id}"><i class="bi bi-plus-lg me-1"></i>Add expense</button>`)
+    + `<div class="filters"><div style="flex:1;min-width:200px;max-width:300px"><label class="form-label">Vehicle</label><select class="form-select" data-vst="id" style="max-width:none">${opts}</select></div>
+       <div><label class="form-label">From</label><input type="date" class="form-control" data-vst="from" value="${from}" max="${TODAY}"></div>
+       <div><label class="form-label">To</label><input type="date" class="form-control" data-vst="to" value="${to}" max="${TODAY}"></div></div>`
+    + `<div class="row g-2 mb-3">
+       <div class="col-6 col-md-3">${stat('Total expense', inr(s.exp), '', '', 'hero')}</div>
+       <div class="col-6 col-md-3">${stat('Trips', s.loads.length + s.drops.length, `${s.loads.length} loads · ${s.drops.length} deliveries`, 'signpost-split')}</div>
+       <div class="col-6 col-md-3">${stat('Kg moved', num(s.kg, 0), '', 'box-seam')}</div>
+       <div class="col-6 col-md-3">${stat('Cost per kg', s.kg ? inr(s.exp / s.kg, 2) : '—', 'expense ÷ kg moved', 'calculator')}</div></div>`
+    + (byCat.length ? `<div class="d-flex flex-wrap gap-2 mb-3">${byCat.map(([c, a]) => `<span class="badge-soft b-brand">${c}: ${inr(a)}</span>`).join('')}</div>` : '')
+    + dataView(cols, rows.reverse(), {foot: true, emptyMsg: 'No trips or expenses in this period.', emptyIcon: 'truck-front'});
+};
+
 /* ---------------- Form pages (jQuery Validation) ---------------- */
 const R = l => `${l} <span class="text-danger">*</span>`;
 const fld = (label, inner, col = 'col-12', help = '') => `<div class="${col}"><label class="form-label">${label}</label>${inner}${help ? `<div class="form-text">${help}</div>` : ''}</div>`;
@@ -850,6 +1043,21 @@ $.validator.addMethod('lteField', function (v, el, p) { const o = +$(p).val(); r
 $.validator.addMethod('mobileIN', function (v, el) { return this.optional(el) || /^[6-9]\d{9}$/.test(v); }, 'Enter a valid 10-digit mobile number.');
 $.validator.addMethod('username', function (v, el) { return this.optional(el) || /^[a-z0-9_.]{3,20}$/i.test(v); }, 'Use 3–20 letters, numbers, dot or underscore.');
 $.validator.addMethod('uniqueUser', function (v, el, id) { return this.optional(el) || !DB.users.some(u => u.username === v.trim().toLowerCase() && u.id !== id); }, 'This username is already taken.');
+$.validator.addMethod('vehNo', function (v, el) { return this.optional(el) || /^[A-Z]{2}[ -]?\d{1,2}[ -]?[A-Z]{0,3}[ -]?\d{1,4}$/i.test(v.trim()); }, 'Enter a valid number, e.g. KL-10-AB-4521.');
+$.validator.addMethod('uniqueVeh', function (v, el, id) { const n = x => x.toUpperCase().replace(/[^A-Z0-9]/g, ''); return this.optional(el) || !DB.vehicles.some(x => n(x.number) === n(v) && x.id !== id); }, 'This vehicle is already added.');
+$.validator.addMethod('maxRecover', function (v, el, id) {
+  const f = el.form; if (f.querySelector('[name=type]:checked')?.value !== 'recovered' || !f.employeeId.value) return true;
+  const own = id ? DB.advances.find(a => a.id === id) : null; let bal = empAdvance(f.employeeId.value);
+  if (own && own.employeeId === f.employeeId.value) bal += own.type === 'recovered' ? own.amount : -own.amount;
+  return +v <= bal;
+}, 'Cannot recover more than the advance balance.');
+$.validator.addMethod('maxDeduct', function (v, el, id) {
+  if (this.optional(el) || !+v) return true; const f = el.form;
+  if (+v > (+f.amount.value || 0)) return false;
+  const own = id ? DB.expenses.find(x => x.id === id) : null; let bal = empAdvance(f.employeeId.value);
+  if (own && own.employeeId === f.employeeId.value) bal += own.advDeduct || 0;
+  return +v <= bal;
+}, 'Cannot be more than the wage amount or the advance balance.');
 $.validator.setDefaults({
   errorElement: 'div', errorClass: 'invalid-feedback', ignore: ':hidden:not(.validate-hidden)',
   highlight: el => $(el).addClass('is-invalid'),
@@ -900,7 +1108,7 @@ function initForm() {
 /* ----- Purchase / Sale ----- */
 function openTxn(kind, id) {
   const isP = kind === 'purchase', arr = isP ? DB.purchases : DB.sales, pt = isP ? 'supplier' : 'customer';
-  const r = id ? arr.find(x => x.id === id) : {date: state.f[isP ? 'pDate' : 'sDate'], partyId: '', birds: '', w1: '', w2: '', rate: ''};
+  const r = id ? arr.find(x => x.id === id) : {date: state.f[isP ? 'pDate' : 'sDate'], partyId: '', birds: '', w1: '', w2: '', rate: '', vehicleId: ''};
   openForm({
     title: (id ? 'Edit ' : 'New ') + (isP ? 'purchase' : 'sale'),
     body: `<div class="row g-3">
@@ -908,7 +1116,7 @@ function openTxn(kind, id) {
       ${fld(R(isP ? 'Supplier (party)' : 'Customer (party)'), sel('partyId', partyList(pt).map(p => [p.id, p.name]), r.partyId, 'Select ' + pt + '…'), 'col-12 col-md-8')}
       ${fld(R('Number of birds'), inp('birds', r.birds, 'type="number" step="1" inputmode="numeric" placeholder="0"'), 'col-6 col-md-4')}
       ${fld(R('Rate (₹ / kg)'), inp('rate', r.rate, NUM + ' placeholder="0.00"'), 'col-6 col-md-4')}
-      <div class="col-md-4 d-none d-md-block"></div>
+      ${fld('Vehicle', sel('vehicleId', activeOpts(DB.vehicles, r.vehicleId, v => `${v.number} (${v.type})`), r.vehicleId, isP ? '— Select —' : '— None / collected —'), 'col-12 col-md-4')}
       ${fld(R('First weight (kg)'), inp('w1', r.w1, NUM + ' placeholder="0.00"'), 'col-6 col-md-4')}
       ${fld(R('Second weight (kg)'), inp('w2', r.w2, NUM + ' placeholder="0.00"'), 'col-6 col-md-4', 'This is the net weight – amount is calculated on it')}
       ${fld('Narration', `<textarea class="form-control" name="narration" id="f-narration" rows="2" maxlength="200" placeholder="e.g. Vehicle KL-10-AB-4521, evening load">${esc(r.narration || '')}</textarea>`)}
@@ -944,7 +1152,7 @@ function openTxn(kind, id) {
       qs('#cAmt').textContent = ok && t.rate ? inr(Math.round(n * t.rate)) : '—';
     },
     onSave: d => {
-      const rec = {date: d.date, partyId: d.partyId, birds: +d.birds, w1: +d.w1, w2: +d.w2, rate: +d.rate, narration: (d.narration || '').trim()};
+      const rec = {date: d.date, partyId: d.partyId, birds: +d.birds, w1: +d.w1, w2: +d.w2, rate: +d.rate, vehicleId: d.vehicleId || '', narration: (d.narration || '').trim()};
       if (id) Object.assign(r, rec); else arr.push({id: uid(), by: state.user.name, ...rec});
       state.f[isP ? 'pDate' : 'sDate'] = d.date;
       toast(`${isP ? 'Purchase' : 'Sale'} saved · ${num(netKg(rec))} kg · ${inr(amtOf(rec))}`);
@@ -952,20 +1160,122 @@ function openTxn(kind, id) {
   });
 }
 
-/* ----- Daily expense ----- */
-function openExpense(id) {
-  const r = id ? DB.expenses.find(x => x.id === id) : {date: state.f.eDate, category: '', amount: '', mode: 'Cash', note: ''};
+/* ----- Daily expense (wages → employee, vehicle costs → vehicle) ----- */
+function openExpense(id, preset = {}) {
+  const r = id ? DB.expenses.find(x => x.id === id) : {date: state.f.eDate, category: preset.vehicleId ? 'Diesel / Fuel' : '', amount: '', mode: 'Cash', note: '', employeeId: '', vehicleId: preset.vehicleId || '', advDeduct: 0, ...preset};
+  const linkOf = () => EXP_LINK[$('#f-category').val()];
   openForm({
     title: id ? 'Edit expense' : 'Add daily expense',
     body: `<div class="row g-3">${fld(R('Date'), inp('date', r.date, `type="date" max="${TODAY}"`), 'col-6')}${fld(R('Amount (₹)'), inp('amount', r.amount, NUM + ' placeholder="0"'), 'col-6')}
       ${fld(R('Category'), sel('category', EXP_CATS, r.category, 'Select…'), 'col-12 col-md-6')}${fld(R('Paid by'), sel('mode', ['Cash', 'UPI', 'Bank'], r.mode), 'col-12 col-md-6')}
-      ${fld('Note', inp('note', r.note, 'maxlength="120" placeholder="e.g. Loading charge for 2 trips"'))}</div>`,
-    rules: {date: dateRule(), amount: {required: true, number: true, min: 1}, category: {required: true}, mode: {required: true}, note: {maxlength: 120}},
-    messages: {amount: {required: 'Enter the amount.', min: 'Amount must be at least ₹1.'}, category: 'Select a category.'},
+      <div class="col-12 col-md-6" id="empWrap">${fld(R('Employee'), sel('employeeId', activeOpts(DB.employees, r.employeeId, e => `${e.name} (${e.designation})`), r.employeeId, 'Select employee…'), '')}</div>
+      <div class="col-12 col-md-6" id="dedWrap">${fld('Deduct from advance (₹)', inp('advDeduct', r.advDeduct || '', NUM + ' placeholder="0"'), '', '<span id="advInfo"></span>')}</div>
+      <div class="col-12 col-md-6" id="vehWrap">${fld(R('Vehicle'), sel('vehicleId', activeOpts(DB.vehicles, r.vehicleId, v => `${v.number} (${v.type}, ${v.ownership})`), r.vehicleId, 'Select vehicle…'), '')}</div>
+      ${fld('Note', inp('note', r.note, 'maxlength="120" placeholder="e.g. Tyre puncture, 2 trips"'))}</div>`,
+    rules: {
+      date: dateRule(), amount: {required: true, number: true, min: 1}, category: {required: true}, mode: {required: true}, note: {maxlength: 120},
+      employeeId: {required: () => linkOf() === 'employee'}, vehicleId: {required: () => linkOf() === 'vehicle'},
+      advDeduct: {number: true, min: 0, maxDeduct: id || ''},
+    },
+    messages: {amount: {required: 'Enter the amount.', min: 'Amount must be at least ₹1.'}, category: 'Select a category.',
+      employeeId: 'Select the employee for these wages.', vehicleId: 'Select the vehicle for this expense.', advDeduct: {min: 'Cannot be negative.'}},
+    onInput: (e, f) => {
+      const link = linkOf(), eid = f.employeeId.value;
+      qs('#empWrap').classList.toggle('d-none', link !== 'employee');
+      qs('#vehWrap').classList.toggle('d-none', link !== 'vehicle');
+      let bal = eid ? empAdvance(eid) : 0;
+      if (id && r.employeeId === eid) bal += r.advDeduct || 0;
+      qs('#dedWrap').classList.toggle('d-none', link !== 'employee' || !eid || bal <= 0);
+      if (e.target.name === 'employeeId' && eid) {
+        const emp = empOf(eid);
+        if (!f.amount.value && emp.wageType === 'Daily') f.amount.value = emp.wage;
+        if (bal <= 0) f.advDeduct.value = '';
+      }
+      const ded = +f.advDeduct.value || 0, amt = +f.amount.value || 0;
+      qs('#advInfo').innerHTML = `Advance balance ${inr(bal)}${ded ? ` · cash paid now <b>${inr(Math.max(0, amt - ded))}</b>` : ''}`;
+      if ((e.target.name === 'amount' || e.target.name === 'employeeId') && f.advDeduct.value) $('#f-advDeduct').valid();
+    },
     onSave: d => {
-      const rec = {date: d.date, category: d.category, amount: +d.amount, mode: d.mode, note: d.note};
+      const link = EXP_LINK[d.category];
+      const rec = {date: d.date, category: d.category, amount: +d.amount, mode: d.mode, note: d.note,
+        employeeId: link === 'employee' ? d.employeeId : '', vehicleId: link === 'vehicle' ? d.vehicleId : '',
+        advDeduct: link === 'employee' && !qs('#dedWrap').classList.contains('d-none') ? (+d.advDeduct || 0) : 0};
       if (id) Object.assign(r, rec); else DB.expenses.push({id: uid(), by: state.user.name, ...rec});
-      state.f.eDate = d.date; toast('Expense saved');
+      state.f.eDate = d.date;
+      toast(rec.employeeId ? `Wages saved for ${empName(rec.employeeId)}` : rec.vehicleId ? `Expense saved for ${vehName(rec.vehicleId)}` : 'Expense saved');
+    },
+  });
+}
+
+/* ----- Employee master ----- */
+function openEmployee(id) {
+  const r = id ? empOf(id) : {name: '', designation: '', phone: '', wageType: 'Daily', wage: '', opening: 0, active: true};
+  openForm({
+    title: id ? 'Edit employee' : 'Add employee',
+    body: `<div class="row g-3">${fld(R('Name'), inp('name', r.name, 'maxlength="50"'))}
+      ${fld(R('Designation'), sel('designation', DESIGNATIONS, r.designation, 'Select…'), 'col-6')}${fld(R('Mobile'), inp('phone', r.phone, 'type="tel" inputmode="numeric" maxlength="10"'), 'col-6')}
+      ${fld(R('Wage type'), sel('wageType', ['Daily', 'Monthly'], r.wageType), 'col-6')}${fld(R('<span id="wageLbl">Wage</span> (₹)'), inp('wage', r.wage, NUM), 'col-6', 'Pre-filled when entering wages')}
+      ${fld('Opening advance (₹)', inp('opening', r.opening, NUM), 'col-12 col-md-6', 'Advance already pending when added')}
+      <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="active" id="eActive" ${r.active ? 'checked' : ''}><label class="form-check-label" for="eActive">Active (shows in wage / vehicle lists)</label></div></div></div>`,
+    rules: {name: {required: true, minlength: 2}, designation: {required: true}, phone: {required: true, mobileIN: true}, wageType: {required: true}, wage: {required: true, number: true, min: 0}, opening: {number: true, min: 0}},
+    messages: {name: {required: 'Enter the name.'}, designation: 'Select a designation.', phone: {required: 'Enter the mobile number.'}, wage: {required: 'Enter the wage amount.', min: 'Wage cannot be negative.'}, opening: {min: 'Cannot be negative.'}},
+    onInput: (e, f) => { qs('#wageLbl').textContent = f.wageType.value === 'Monthly' ? 'Monthly salary' : 'Daily wage'; },
+    onSave: d => {
+      const rec = {name: d.name.trim(), designation: d.designation, phone: d.phone, wageType: d.wageType, wage: +d.wage, opening: +d.opening || 0, active: !!d.active};
+      if (id) Object.assign(r, rec); else DB.employees.push({id: uid(), ...rec});
+      toast('Employee saved');
+    },
+  });
+}
+
+/* ----- Vehicle master ----- */
+function openVehicle(id) {
+  const r = id ? vehOf(id) : {number: '', type: '', ownership: 'Own', ownerName: '', driverId: '', active: true};
+  openForm({
+    title: id ? 'Edit vehicle' : 'Add vehicle',
+    body: `<div class="row g-3">${fld(R('Vehicle number'), inp('number', r.number, 'maxlength="15" placeholder="KL-10-AB-4521" style="text-transform:uppercase"'), 'col-12 col-md-6')}
+      ${fld(R('Type'), sel('type', VEH_TYPES, r.type, 'Select…'), 'col-6 col-md-3')}${fld(R('Ownership'), sel('ownership', ['Own', 'Hired'], r.ownership), 'col-6 col-md-3')}
+      <div class="col-12 col-md-6" id="ownerWrap">${fld(R('Vehicle owner / agency'), inp('ownerName', r.ownerName, 'maxlength="50"'), '')}</div>
+      ${fld('Regular driver', sel('driverId', activeOpts(DB.employees, r.driverId, e => `${e.name} (${e.designation})`), r.driverId, '— None —'), 'col-12 col-md-6')}
+      <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="active" id="vActive" ${r.active ? 'checked' : ''}><label class="form-check-label" for="vActive">Active</label></div></div></div>`,
+    rules: {number: {required: true, vehNo: true, uniqueVeh: id || ''}, type: {required: true}, ownership: {required: true}, ownerName: {required: true}},
+    messages: {number: {required: 'Enter the vehicle number.'}, type: 'Select the vehicle type.', ownerName: 'Enter the owner / agency of the hired vehicle.'},
+    onInput: (e, f) => { qs('#ownerWrap').classList.toggle('d-none', f.ownership.value !== 'Hired'); },
+    onSave: d => {
+      const rec = {number: d.number.trim().toUpperCase().replace(/\s+/g, '-'), type: d.type, ownership: d.ownership, ownerName: d.ownership === 'Hired' ? (d.ownerName || '').trim() : '', driverId: d.driverId || '', active: !!d.active};
+      if (id) Object.assign(r, rec); else DB.vehicles.push({id: uid(), ...rec});
+      toast('Vehicle saved');
+    },
+  });
+}
+
+/* ----- Employee advance (give / recover) ----- */
+function openAdvance(type, empId, id) {
+  const r = id ? DB.advances.find(a => a.id === id) : {date: TODAY, type: type || 'given', employeeId: empId || '', amount: '', mode: 'Cash', note: ''};
+  openForm({
+    title: id ? 'Edit advance entry' : (r.type === 'given' ? 'Give advance' : 'Recover advance'),
+    sub: 'Advance is money the employee owes back — it is not an expense',
+    body: `<div class="row g-3">
+      <div class="col-12"><label class="form-label">${R('Entry')}</label><div class="d-flex gap-2 seg radio-group">
+        <input type="radio" class="btn-check" name="type" id="at-g" value="given" ${r.type === 'given' ? 'checked' : ''}><label class="btn btn-outline-out flex-fill py-2" for="at-g"><i class="bi bi-arrow-up-right me-1"></i>Give advance</label>
+        <input type="radio" class="btn-check" name="type" id="at-r" value="recovered" ${r.type === 'recovered' ? 'checked' : ''}><label class="btn btn-outline-in flex-fill py-2" for="at-r"><i class="bi bi-arrow-down-left me-1"></i>Recover (cash)</label>
+      </div></div>
+      ${fld(R('Employee'), sel('employeeId', activeOpts(DB.employees, r.employeeId, e => `${e.name} (${e.designation})`), r.employeeId, 'Select employee…'))}
+      <div class="col-12"><div class="note py-2" id="advBal"></div></div>
+      ${fld(R('Date'), inp('date', r.date, `type="date" max="${TODAY}"`), 'col-6')}${fld(R('Amount (₹)'), inp('amount', r.amount, NUM), 'col-6')}
+      ${fld(R('Mode'), sel('mode', ['Cash', 'UPI', 'Bank'], r.mode), 'col-12 col-md-6')}${fld('Note', inp('note', r.note, 'maxlength="120" placeholder="e.g. Family function"'), 'col-12 col-md-6')}</div>`,
+    rules: {type: {required: true}, employeeId: {required: true}, date: {required: true, notFuture: true}, amount: {required: true, number: true, min: 1, maxRecover: id || ''}, mode: {required: true}},
+    messages: {type: 'Choose give or recover.', employeeId: 'Select the employee.', amount: {required: 'Enter the amount.', min: 'Amount must be at least ₹1.'}},
+    onInput: (e, f) => {
+      const eid = f.employeeId.value, t = f.querySelector('[name=type]:checked').value;
+      qs('#advBal').innerHTML = eid ? `Advance balance: <b>${inr(empAdvance(eid) - (id && r.type === 'given' ? r.amount : 0) + (id && r.type === 'recovered' ? r.amount : 0))}</b>` : 'Select employee to see advance balance';
+      if (e.target.name === 'type' || e.target.name === 'employeeId') { if (f.amount.value) $('#f-amount').valid(); }
+      qs('#pageTitle') && (qs('#pageTitle').textContent = t === 'given' ? 'Give advance' : 'Recover advance');
+    },
+    onSave: d => {
+      const rec = {date: d.date, type: d.type, employeeId: d.employeeId, amount: +d.amount, mode: d.mode, note: d.note};
+      if (id) Object.assign(r, rec); else DB.advances.push({id: uid(), ...rec});
+      toast(`${d.type === 'given' ? 'Advance' : 'Recovery'} of ${inr(+d.amount)} saved`);
     },
   });
 }
@@ -1087,7 +1397,7 @@ function openUser(id) {
 }
 
 /* Delete */
-const COLL = {purchase: 'purchases', sale: 'sales', expense: 'expenses', monthly: 'monthly', journal: 'journal', user: 'users'};
+const COLL = {purchase: 'purchases', sale: 'sales', expense: 'expenses', monthly: 'monthly', journal: 'journal', user: 'users', advance: 'advances'};
 let pendingDel = null;
 function askDelete(type, id) {
   pendingDel = {type, id};
@@ -1117,7 +1427,12 @@ document.addEventListener('click', e => {
     case 'today': state.f[key] = TODAY; render(); break;
     case 'new-purchase': openTxn('purchase'); break;
     case 'new-sale': openTxn('sale'); break;
-    case 'new-expense': openExpense(); break;
+    case 'new-expense': openExpense(null, type === 'vehicle' ? {vehicleId: id || state.vst?.id} : {}); break;
+    case 'new-employee': openEmployee(); break;
+    case 'new-vehicle': openVehicle(); break;
+    case 'new-advance': openAdvance(type || 'given', id || (state.page === 'emp-statement' ? state.est?.id : '')); break;
+    case 'est': state.est = {id, from: monthOf(TODAY) + '-01', to: TODAY}; go('emp-statement'); break;
+    case 'vst': state.vst = {id, from: monthOf(TODAY) + '-01', to: TODAY}; go('veh-statement'); break;
     case 'new-monthly': openMonthly(); break;
     case 'new-journal': openJournal(); break;
     case 'new-user': openUser(); break;
@@ -1126,7 +1441,7 @@ document.addEventListener('click', e => {
     case 'stmt': state.stmt = {type, id, from: monthOf(TODAY) + '-01', to: TODAY}; go('statement'); break;
     case 'open-day': state.f.plDate = a.dataset.d; go('pl-daily'); break;
     case 'edit':
-      ({purchase: () => openTxn('purchase', id), sale: () => openTxn('sale', id), expense: () => openExpense(id), monthly: () => openMonthly(id), journal: () => openJournal(id), user: () => openUser(id), supplier: () => openParty('supplier', id), customer: () => openParty('customer', id)})[type]();
+      ({purchase: () => openTxn('purchase', id), sale: () => openTxn('sale', id), expense: () => openExpense(id), monthly: () => openMonthly(id), journal: () => openJournal(id), user: () => openUser(id), supplier: () => openParty('supplier', id), customer: () => openParty('customer', id), employee: () => openEmployee(id), vehicle: () => openVehicle(id), advance: () => openAdvance(null, null, id)})[type]();
       break;
     case 'del': askDelete(type, id); break;
     case 'form-cancel': closeForm(); break;
@@ -1137,6 +1452,8 @@ document.addEventListener('change', e => {
   if (k && e.target.value) { state.f[k] = e.target.value > (e.target.type === 'month' ? monthOf(TODAY) : TODAY) ? (e.target.type === 'month' ? monthOf(TODAY) : TODAY) : e.target.value; render(); }
   const s = e.target.dataset.stmt;
   if (s && e.target.value) { state.stmt[s] = e.target.value; render(); }
+  const es = e.target.dataset.est; if (es && e.target.value) { state.est[es] = e.target.value; render(); }
+  const vs = e.target.dataset.vst; if (vs && e.target.value) { state.vst[vs] = e.target.value; render(); }
 });
 document.addEventListener('input', e => {
   const k = e.target.dataset.search; if (!k) return;
@@ -1145,7 +1462,7 @@ document.addEventListener('input', e => {
 });
 window.addEventListener('hashchange', () => {
   const h = location.hash.slice(1);
-  if (state.user && h && h !== state.page && PAGES[h] && h !== 'form') { state.page = h; render(); window.scrollTo(0, 0); }
+  if (state.user && h && h !== state.page && PAGES[h] && !['form', 'statement', 'emp-statement', 'veh-statement'].includes(h)) { state.page = h; render(); window.scrollTo(0, 0); }
 });
 $('#loginForm').validate({
   rules: {u: {required: true}, p: {required: true, minlength: 4}},
@@ -1158,7 +1475,7 @@ function login(u, p) {
   if (!user.active) { qs('#loginErr').textContent = 'This user is disabled. Contact the owner.'; return; }
   qs('#loginErr').textContent = ''; state.user = user;
   const h = location.hash.slice(1);
-  state.page = PAGES[h] && !['statement', 'form'].includes(h) ? h : (user.role === 'owner' ? 'dashboard' : 'sales');
+  state.page = PAGES[h] && !['statement', 'emp-statement', 'veh-statement', 'form'].includes(h) ? h : (user.role === 'owner' ? 'dashboard' : 'sales');
   render(); window.scrollTo(0, 0);
   toast(`Welcome, ${user.name.split(' ')[0]} (${user.role})`);
 }
