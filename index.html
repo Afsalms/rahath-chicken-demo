@@ -243,7 +243,7 @@ const avgOf = t => t.birds ? netKg(t) / t.birds : 0;
 const tone = n => n < 0 ? 'text-bad' : 'text-good';
 
 /* ---------------- Data ---------------- */
-const DB = {users: [], suppliers: [], customers: [], purchases: [], sales: [], expenses: [], monthly: [], journal: [], payments: [], employees: [], vehicles: [], advances: []};
+const DB = {users: [], suppliers: [], customers: [], purchases: [], sales: [], expenses: [], monthly: [], journal: [], payments: [], employees: [], vehicles: [], advances: [], accounts: [], contra: [], settings: {openDate: '2026-10-01', openBirds: 0, openBirdValue: 0}};
 const EXP_CATS = ['Wages', 'Diesel / Fuel', 'Vehicle Repair', 'Vehicle Rent', 'Loading & Unloading', 'Tea & Food', 'Ice & Water', 'Other'];
 const EXP_LINK = {'Wages': 'employee', 'Diesel / Fuel': 'vehicle', 'Vehicle Repair': 'vehicle', 'Vehicle Rent': 'vehicle'};   // category → which master it is entered against
 const DESIGNATIONS = ['Driver', 'Loader', 'Helper', 'Supervisor', 'Accountant', 'Other'];
@@ -291,8 +291,17 @@ function seed() {
     {id: 'v2', number: 'KL-11-Q-7788', type: 'Pickup', ownership: 'Own', ownerName: '', driverId: 'e3', active: true},
     {id: 'v3', number: 'KL-55-C-1290', type: 'Truck', ownership: 'Hired', ownerName: 'Malappuram Transports', driverId: '', active: true},
   ];
+  DB.accounts = [
+    {id: 'a1', name: 'Cash in Hand', type: 'Cash', bank: '', accNo: '', ifsc: '', opening: 25000, active: true},
+    {id: 'a2', name: 'SBI Current A/c', type: 'Bank', bank: 'State Bank of India', accNo: 'XXXX4421', ifsc: 'SBIN0070123', opening: 450000, active: true},
+    {id: 'a3', name: 'Federal Bank A/c', type: 'Bank', bank: 'Federal Bank', accNo: 'XXXX8890', ifsc: 'FDRL0001234', opening: 220000, active: true},
+  ];
+  const acc = m => ({Cash: 'a1', UPI: 'a2', Bank: r() < .6 ? 'a2' : 'a3', Cheque: 'a2'})[m];
   const ADV = {'2026-10-05': ['e4', 3000, 'Medical'], '2026-10-12': ['e2', 5000, 'Family function'], '2026-10-26': ['e6', 2000, ''], '2026-11-04': ['e3', 4000, 'House rent'], '2026-11-10': ['e4', 1500, '']};
   let carry = 0;
+  [['2026-10', [['Shop Rent', 15000], ['Staff Salary', 42000], ['Electricity', 3180], ['Phone & Internet', 799], ['Accountant Fee', 2500], ['Shop Maintenance', 4500]]],
+   ['2026-11', [['Shop Rent', 15000], ['Staff Salary', 42000], ['Electricity', 2950], ['Phone & Internet', 799], ['Accountant Fee', 2500]]]]
+    .forEach(([m, list]) => list.forEach(([cat, amount]) => DB.monthly.push({id: uid(), month: m, date: m === '2026-10' ? '2026-10-31' : '2026-11-05', accountId: cat === 'Staff Salary' ? 'a1' : 'a2', category: cat, amount, note: ''})));
   for (let d = '2026-10-01'; d <= TODAY; d = addDays(d, 1)) {
     const isToday = d === TODAY;
     const B = ri(1800, 2600), avg = rnd(2.0, 2.3), prate = ri(98, 112);
@@ -304,7 +313,7 @@ function seed() {
       const p = {id: uid(), date: d, partyId: s.id, birds, w1: h(net * rnd(1.008, 1.02)), w2: net, rate: prate + ri(-1, 1), by: pick(staff), vehicleId: pick(['v1', 'v1', 'v3']), narration: r() < .4 ? pick(['Morning load', 'Night load', 'Farm pickup', 'Second load']) : ''};
       DB.purchases.push(p); pAmt += amtOf(p);
       const payOn = addDays(d, ri(1, 2));
-      if (payOn <= TODAY && r() < .8) DB.payments.push({id: uid(), date: payOn, partyType: 'supplier', partyId: s.id, amount: Math.round(amtOf(p) * rnd(.8, 1) / 1000) * 1000, mode: pick(['Bank', 'UPI', 'Bank']), note: ''});
+      if (payOn <= TODAY && r() < .8) DB.payments.push({id: uid(), date: payOn, partyType: 'supplier', partyId: s.id, amount: Math.round(amtOf(p) * rnd(.8, 1) / 1000) * 1000, accountId: accBalance('a2', d) >= accBalance('a3', d) ? 'a2' : 'a3', note: ''});
     });
     const dead = r() < .3 ? ri(4, 16) : 0;
     if (dead) DB.journal.push({id: uid(), date: d, type: 'in', partyType: 'supplier', partyId: sups[0].id, reason: 'Bird mortality', birds: dead, amount: Math.round(dead * avg * prate / 10) * 10, note: 'Dead on arrival'});
@@ -322,7 +331,7 @@ function seed() {
       if (s.vehicleId && r() < .3) s.narration = pick(['Morning delivery', 'Evening delivery', 'Second trip']);
       DB.sales.push(s);
       const rec = addDays(d, 1);
-      if (rec <= TODAY && r() < .85) DB.payments.push({id: uid(), date: rec, partyType: 'customer', partyId: c.id, amount: Math.round(amtOf(s) * rnd(.82, 1) / 100) * 100, mode: pick(['Cash', 'UPI', 'Cash', 'Bank']), note: ''});
+      if (rec <= TODAY && r() < .85) DB.payments.push({id: uid(), date: rec, partyType: 'customer', partyId: c.id, amount: Math.round(amtOf(s) * rnd(.82, 1) / 100) * 100, accountId: acc(pick(['Cash', 'UPI', 'Cash', 'Bank'])), note: ''});
     });
     if (r() < .22) {
       const c = pick(custs), kind = r();
@@ -332,7 +341,7 @@ function seed() {
       else { j.reason = 'Rate difference'; j.amount = ri(30, 80) * 10; }
       DB.journal.push(j);
     }
-    if (ADV[d]) DB.advances.push({id: uid(), date: d, type: 'given', employeeId: ADV[d][0], amount: ADV[d][1], mode: 'Cash', note: ADV[d][2]});
+    if (ADV[d]) DB.advances.push({id: uid(), date: d, type: 'given', employeeId: ADV[d][0], amount: ADV[d][1], accountId: 'a1', note: ADV[d][2]});
     const ex = [];
     DB.employees.filter(e => e.wageType === 'Daily').forEach(e => {
       if (r() > .9) return;                                         // day off
@@ -344,15 +353,15 @@ function seed() {
     if (r() < .1) ex.push({category: 'Vehicle Repair', amount: ri(8, 25) * 100, vehicleId: pick(['v1', 'v2']), note: pick(['Tyre puncture', 'Oil change', 'Brake work', 'Battery'])});
     ex.push({category: 'Loading & Unloading', amount: ri(4, 7) * 100}, {category: 'Tea & Food', amount: ri(15, 35) * 10});
     if (r() < .2) ex.push({category: 'Ice & Water', amount: ri(10, 30) * 10});
-    ex.forEach(x => DB.expenses.push({id: uid(), date: d, mode: x.category === 'Diesel / Fuel' ? 'UPI' : 'Cash', note: '', by: pick(staff), employeeId: '', vehicleId: '', advDeduct: 0, ...x}));
+    ex.forEach(x => DB.expenses.push({id: uid(), date: d, accountId: x.category === 'Diesel / Fuel' ? 'a2' : 'a1', note: '', by: pick(staff), employeeId: '', vehicleId: '', advDeduct: 0, ...x}));
     if (['03', '10', '17', '24', '31'].includes(d.slice(8))) {   // weekly settlement keeps balances realistic
-      DB.customers.forEach(c => { const b = partyBalance('customer', c.id, d) - sum(DB.sales.filter(x => x.partyId === c.id && x.date === d), amtOf); const keep = ri(5, 35) * 1000; if (b > keep) DB.payments.push({id: uid(), date: d, partyType: 'customer', partyId: c.id, amount: Math.round((b - keep) / 100) * 100, mode: 'Bank', note: 'Weekly settlement'}); });
-      DB.suppliers.forEach(s => { const b = partyBalance('supplier', s.id, d) - sum(DB.purchases.filter(x => x.partyId === s.id && x.date >= addDays(d, -1)), amtOf); const keep = ri(20, 60) * 1000; if (b > keep) DB.payments.push({id: uid(), date: d, partyType: 'supplier', partyId: s.id, amount: Math.round((b - keep) / 1000) * 1000, mode: 'Bank', note: 'Weekly settlement'}); });
+      DB.customers.forEach(c => { const b = partyBalance('customer', c.id, d) - sum(DB.sales.filter(x => x.partyId === c.id && x.date === d), amtOf); const keep = ri(5, 35) * 1000; if (b > keep) DB.payments.push({id: uid(), date: d, partyType: 'customer', partyId: c.id, amount: Math.round((b - keep) / 100) * 100, accountId: acc('Bank'), note: 'Weekly settlement'}); });
+      DB.suppliers.forEach(s => { const b = partyBalance('supplier', s.id, d) - sum(DB.purchases.filter(x => x.partyId === s.id && x.date >= addDays(d, -1)), amtOf); const keep = ri(20, 60) * 1000; if (b > keep) DB.payments.push({id: uid(), date: d, partyType: 'supplier', partyId: s.id, amount: Math.round((b - keep) / 1000) * 1000, accountId: accBalance('a2', d) >= accBalance('a3', d) ? 'a2' : 'a3', note: 'Weekly settlement'}); });
     }
+    const cashBal = accBalance('a1', d);                        // bank the surplus cash
+    if (cashBal > 60000) DB.contra.push({id: uid(), date: d, fromId: 'a1', toId: accBalance('a2', d) <= accBalance('a3', d) ? 'a2' : 'a3', amount: Math.floor((cashBal - ri(20, 40) * 1000) / 1000) * 1000, note: 'Cash deposit'});
+    if (d.slice(8) === '15') DB.contra.push({id: uid(), date: d, fromId: 'a2', toId: 'a1', amount: 20000, note: 'Cash withdrawal for wages'});
   }
-  [['2026-10', [['Shop Rent', 15000], ['Staff Salary', 42000], ['Electricity', 3180], ['Phone & Internet', 799], ['Accountant Fee', 2500], ['Shop Maintenance', 4500]]],
-   ['2026-11', [['Shop Rent', 15000], ['Staff Salary', 42000], ['Electricity', 2950], ['Phone & Internet', 799], ['Accountant Fee', 2500]]]]
-    .forEach(([m, list]) => list.forEach(([cat, amount]) => DB.monthly.push({id: uid(), month: m, category: cat, amount, note: ''})));
 }
 
 /* ---------------- Calculations ---------------- */
@@ -361,9 +370,9 @@ const partyName = (t, id) => (partyList(t).find(p => p.id === id) || {}).name ||
 const monthOf = d => d.slice(0, 7);
 
 function stockMap() {
-  const all = [...DB.purchases, ...DB.sales].map(x => x.date).sort();
-  const m = {}; if (!all.length) return m;
-  let open = 0, openVal = 0, lastCpb = 0;
+  const all = [...DB.purchases, ...DB.sales].map(x => x.date).concat(DB.settings.openDate).sort();
+  const m = {};
+  let open = DB.settings.openBirds || 0, openVal = DB.settings.openBirdValue || 0, lastCpb = open ? openVal / open : 0;
   for (let d = all[0]; d <= TODAY; d = addDays(d, 1)) {
     const P = DB.purchases.filter(x => x.date === d), S = DB.sales.filter(x => x.date === d);
     const pB = sum(P, x => x.birds), pKg = sum(P, netKg), pAmt = sum(P, amtOf);
@@ -397,7 +406,7 @@ function partyBalance(t, id, upto = TODAY) {
 function ledger(t, id) {
   const tx = t === 'supplier' ? DB.purchases : DB.sales, rows = [];
   tx.filter(x => x.partyId === id).forEach(x => rows.push({date: x.date, kind: t === 'supplier' ? 'Purchase' : 'Sale', desc: `${num(x.birds, 0)} birds · ${num(netKg(x))} kg @ ${inr(x.rate, 2)}` + (x.narration ? ' · ' + x.narration : ''), add: amtOf(x), less: 0}));
-  DB.payments.filter(x => x.partyType === t && x.partyId === id).forEach(x => rows.push({date: x.date, kind: t === 'supplier' ? 'Payment' : 'Receipt', desc: x.mode + (x.note ? ' · ' + x.note : ''), add: 0, less: x.amount}));
+  DB.payments.filter(x => x.partyType === t && x.partyId === id).forEach(x => rows.push({date: x.date, kind: t === 'supplier' ? 'Payment' : 'Receipt', desc: accName(x.accountId) + (x.note ? ' · ' + x.note : ''), add: 0, less: x.amount}));
   DB.journal.filter(x => x.partyType === t && x.partyId === id).forEach(x => rows.push({date: x.date, kind: x.type === 'in' ? 'Discount In' : 'Discount Out', desc: x.reason + (x.birds ? ` · ${x.birds} birds` : '') + (x.note ? ' · ' + x.note : ''), add: 0, less: x.amount}));
   const order = {Purchase: 0, Sale: 0, 'Discount In': 1, 'Discount Out': 1, Payment: 2, Receipt: 2};
   return rows.sort((a, b) => a.date.localeCompare(b.date) || order[a.kind] - order[b.kind]);
@@ -406,7 +415,7 @@ function ledger(t, id) {
 /* ---------------- App state & navigation ---------------- */
 const state = {
   user: null, page: 'dashboard', stmt: null, est: null, vst: null,
-  f: {pDate: TODAY, sDate: TODAY, eDate: TODAY, jFrom: addDays(TODAY, -6), jTo: TODAY, kFrom: addDays(TODAY, -6), kTo: TODAY, plDate: TODAY, plMonth: monthOf(TODAY), mMonth: monthOf(TODAY), cpFrom: monthOf(TODAY) + '-01', cpTo: TODAY, aFrom: monthOf(TODAY) + '-01', aTo: TODAY},
+  f: {pDate: TODAY, sDate: TODAY, eDate: TODAY, jFrom: addDays(TODAY, -6), jTo: TODAY, kFrom: addDays(TODAY, -6), kTo: TODAY, plDate: TODAY, plMonth: monthOf(TODAY), mMonth: monthOf(TODAY), cpFrom: monthOf(TODAY) + '-01', cpTo: TODAY, aFrom: monthOf(TODAY) + '-01', aTo: TODAY, bkAcc: 'a1', bkFrom: monthOf(TODAY) + '-01', bkTo: TODAY, cFrom: monthOf(TODAY) + '-01', cTo: TODAY},
   q: {suppliers: '', customers: '', employees: '', vehicles: ''},
 };
 const NAV = [
@@ -417,14 +426,18 @@ const NAV = [
   {id: 'journal', label: 'Journal', icon: 'journal-text', roles: ['owner'], grp: 'Daily entry'},
   {id: 'stock', label: 'Pending Stock', icon: 'box-seam', roles: ['owner'], grp: 'Daily entry'},
   {id: 'advances', label: 'Employee Advance', icon: 'cash-coin', roles: ['owner'], grp: 'Daily entry'},
+  {id: 'book', label: 'Cash & Bank Book', icon: 'journal-bookmark', roles: ['owner'], grp: 'Cash & Bank'},
+  {id: 'contra', label: 'Contra', icon: 'arrow-left-right', roles: ['owner'], grp: 'Cash & Bank'},
   {id: 'suppliers', label: 'Suppliers', icon: 'building', roles: ['owner'], grp: 'Parties'},
   {id: 'customers', label: 'Customers', icon: 'people', roles: ['owner'], grp: 'Parties'},
   {id: 'employees', label: 'Employees', icon: 'person-badge', roles: ['owner'], grp: 'Masters'},
   {id: 'vehicles', label: 'Vehicles', icon: 'truck-front', roles: ['owner'], grp: 'Masters'},
+  {id: 'accounts', label: 'Cash & Bank Accounts', icon: 'bank', roles: ['owner'], grp: 'Masters'},
   {id: 'monthly', label: 'Monthly Expense', icon: 'calendar3', roles: ['owner'], grp: 'Accounts'},
   {id: 'pl-daily', label: 'Daily P&L', icon: 'graph-up-arrow', roles: ['owner'], grp: 'Reports'},
   {id: 'pl-monthly', label: 'Monthly P&L', icon: 'bar-chart-line', roles: ['owner'], grp: 'Reports'},
   {id: 'pl-customer', label: 'Customer-wise P&L', icon: 'person-lines-fill', roles: ['owner'], grp: 'Reports'},
+  {id: 'opening', label: 'Opening Balances', icon: 'clipboard-data', roles: ['owner'], grp: 'Settings'},
   {id: 'users', label: 'Users', icon: 'shield-lock', roles: ['owner'], grp: 'Settings'},
 ];
 const navFor = role => NAV.filter(n => n.roles.includes(role));
@@ -478,7 +491,7 @@ function render() {
   if (state.page === 'form') initForm();
 
   // FAB
-  const fabMap = {purchase: ['new-purchase'], sales: ['new-sale'], expenses: ['new-expense'], journal: ['new-journal'], monthly: ['new-monthly'], suppliers: ['new-party', 'supplier'], customers: ['new-party', 'customer'], users: ['new-user'], statement: ['pay'], employees: ['new-employee'], vehicles: ['new-vehicle'], advances: ['new-advance', 'given'], 'emp-statement': ['new-advance', 'given'], 'veh-statement': ['new-expense', 'vehicle']};
+  const fabMap = {purchase: ['new-purchase'], sales: ['new-sale'], expenses: ['new-expense'], journal: ['new-journal'], monthly: ['new-monthly'], suppliers: ['new-party', 'supplier'], customers: ['new-party', 'customer'], users: ['new-user'], statement: ['pay'], employees: ['new-employee'], vehicles: ['new-vehicle'], advances: ['new-advance', 'given'], 'emp-statement': ['new-advance', 'given'], 'veh-statement': ['new-expense', 'vehicle'], contra: ['new-contra'], book: ['new-contra'], accounts: ['new-account']};
   const fab = qs('#fab'), fm = fabMap[state.page];
   if (fm) { fab.classList.remove('d-none'); fab.dataset.action = fm[0]; fab.dataset.type = fm[1] || ''; }
   else fab.classList.add('d-none');
@@ -569,7 +582,9 @@ PAGES.dashboard = () => {
       </div>
       <div class="col-lg-4">
         <div class="cardx p-3 h-100">
-          <div class="fw-bold mb-2">Top customer dues</div>
+          <div class="fw-bold mb-2 d-flex justify-content-between"><span>Cash &amp; Bank</span><a href="#book" data-nav="book" class="link small">Book →</a></div>
+          ${DB.accounts.filter(a => a.active).map(a => `<a href="#" class="d-flex justify-content-between align-items-center py-2 border-bottom text-decoration-none text-reset" data-action="book-acc" data-id="${a.id}"><div class="small fw-semibold"><i class="bi bi-${a.type === 'Cash' ? 'cash-stack' : 'bank'} me-2" style="color:var(--brand)"></i>${esc(a.name)}</div><div class="fw-bold">${inr(accBalance(a.id))}</div></a>`).join('')}
+          <div class="fw-bold mb-2 mt-3">Top customer dues</div>
           ${topDue.map(c => `<a href="#" class="d-flex justify-content-between align-items-center py-2 border-bottom text-decoration-none text-reset" data-action="stmt" data-type="customer" data-id="${c.id}"><div><div class="fw-semibold small">${esc(c.name)}</div><div class="text-muted" style="font-size:.75rem">${esc(c.place)}</div></div><div class="fw-bold">${inr(c.bal)}</div></a>`).join('')}
         </div>
       </div>
@@ -615,7 +630,7 @@ PAGES.expenses = () => {
     {h: 'Category', card: 'title', v: r => `<span class="fw-semibold">${esc(r.category)}</span>`},
     {h: 'Employee / Vehicle', card: 'sub', v: r => [r.employeeId ? `<i class="bi bi-person me-1"></i>${esc(empName(r.employeeId))}` : '', r.vehicleId ? `<i class="bi bi-truck-front me-1"></i>${esc(vehName(r.vehicleId))}` : '', r.advDeduct ? `<span class="badge-soft b-amber">${inr(r.advDeduct)} from advance</span>` : ''].filter(Boolean).join(' · ') || '<span class="text-muted">—</span>'},
     {h: 'Note', v: r => esc(r.note || '—')},
-    {h: 'Mode', v: r => `<span class="badge-soft b-gray">${r.mode}</span>`},
+    {h: 'Account', v: r => `<span class="badge-soft b-gray">${esc(accName(r.accountId))}</span>`},
     {h: 'Entered by', v: r => esc(r.by || '')},
     {h: 'Amount', card: 'amount', end: 1, v: r => `<b>${inr(r.amount)}</b>`, tf: inr(tot)},
   ];
@@ -632,7 +647,8 @@ PAGES.monthly = () => {
   const m = state.f.mMonth, list = DB.monthly.filter(x => x.month === m), tot = sum(list, x => x.amount);
   const cols = [
     {h: 'Category', card: 'title', v: r => `<span class="fw-semibold">${esc(r.category)}</span>`},
-    {h: 'Note', card: 'sub', v: r => esc(r.note || '—')},
+    {h: 'Paid on', card: 'sub', v: r => `${dShort(r.date)} · ${esc(accName(r.accountId))}`},
+    {h: 'Note', v: r => esc(r.note || '—')},
     {h: 'Amount', card: 'amount', end: 1, v: r => `<b>${inr(r.amount)}</b>`, tf: inr(tot)},
     {h: '', card: 'actions', v: r => actBtns('monthly', r.id), mv: r => mActs('monthly', r.id)},
   ];
@@ -878,7 +894,7 @@ const wageText = e => e.wageType === 'Daily' ? `${inr(e.wage)}/day` : `${inr(e.w
 /* All advance movements: advances given / recovered in cash + deductions taken from wage entries */
 function advEntries() {
   return [
-    ...DB.advances.map(a => ({...a, src: 'adv'})),
+    ...DB.advances.map(a => ({...a, mode: accName(a.accountId), src: 'adv'})),
     ...DB.expenses.filter(e => e.category === 'Wages' && e.advDeduct > 0).map(e => ({id: e.id, date: e.date, employeeId: e.employeeId, type: 'recovered', amount: e.advDeduct, mode: 'Wage deduction', note: e.note || '', src: 'exp'})),
   ];
 }
@@ -941,7 +957,7 @@ PAGES.advances = () => {
     {h: 'Date', tableOnly: true, v: r => dShort(r.date)},
     {h: 'Employee', card: 'title', v: r => `<a href="#" class="link" data-action="est" data-id="${r.employeeId}">${esc(empName(r.employeeId))}</a>`},
     {h: 'Type', card: 'sub', v: r => (r.type === 'given' ? '<span class="badge-soft b-out">Advance given</span>' : '<span class="badge-soft b-in">Recovered</span>') + `<span class="d-md-none text-muted"> · ${dShort(r.date)}</span>`},
-    {h: 'Mode', v: r => esc(r.mode)},
+    {h: 'Account', v: r => esc(r.mode)},
     {h: 'Note', v: r => esc(r.note || '—')},
     {h: 'Amount', card: 'amount', end: 1, v: r => `<b class="${r.type === 'given' ? 'text-bad' : 'text-good'}">${r.type === 'given' ? '+' : '−'}${inr(r.amount)}</b>`},
     {h: '', card: 'actions', v: r => r.src === 'adv' ? actBtns('advance', r.id) : `<div class="text-end"><button class="btn btn-sm btn-light border" data-action="edit" data-type="expense" data-id="${r.id}">Wage entry</button></div>`,
@@ -961,8 +977,8 @@ PAGES.advances = () => {
 PAGES['emp-statement'] = () => {
   const {id, from, to} = state.est, e = empOf(id);
   const rows0 = [
-    ...DB.expenses.filter(x => x.category === 'Wages' && x.employeeId === id).map(x => ({date: x.date, kind: 'Wages', desc: (x.advDeduct ? `Cash ${inr(x.amount - x.advDeduct)} + ${inr(x.advDeduct)} from advance` : `Paid by ${x.mode}`) + (x.note ? ' · ' + x.note : ''), wage: x.amount, given: 0, rec: x.advDeduct || 0})),
-    ...DB.advances.filter(a => a.employeeId === id).map(a => ({date: a.date, kind: a.type === 'given' ? 'Advance' : 'Recovery', desc: a.mode + (a.note ? ' · ' + a.note : ''), wage: 0, given: a.type === 'given' ? a.amount : 0, rec: a.type === 'recovered' ? a.amount : 0})),
+    ...DB.expenses.filter(x => x.category === 'Wages' && x.employeeId === id).map(x => ({date: x.date, kind: 'Wages', desc: (x.advDeduct ? `Cash ${inr(x.amount - x.advDeduct)} + ${inr(x.advDeduct)} from advance` : `Paid from ${accName(x.accountId)}`) + (x.note ? ' · ' + x.note : ''), wage: x.amount, given: 0, rec: x.advDeduct || 0})),
+    ...DB.advances.filter(a => a.employeeId === id).map(a => ({date: a.date, kind: a.type === 'given' ? 'Advance' : 'Recovery', desc: accName(a.accountId) + (a.note ? ' · ' + a.note : ''), wage: 0, given: a.type === 'given' ? a.amount : 0, rec: a.type === 'recovered' ? a.amount : 0})),
   ].sort((a, b) => a.date.localeCompare(b.date) || ({Advance: 0, Wages: 1, Recovery: 2}[a.kind] - {Advance: 0, Wages: 1, Recovery: 2}[b.kind]));
   const open = e.opening + sum(rows0.filter(r => r.date < from), r => r.given - r.rec);
   let bal = open;
@@ -997,7 +1013,7 @@ PAGES['emp-statement'] = () => {
 PAGES['veh-statement'] = () => {
   const {id, from, to} = state.vst, v = vehOf(id), s = vehStats(id, from, to);
   const rows = [
-    ...s.exps.map(x => ({date: x.date, kind: x.category, desc: [x.note, 'Paid by ' + x.mode].filter(Boolean).join(' · '), kg: 0, exp: x.amount})),
+    ...s.exps.map(x => ({date: x.date, kind: x.category, desc: [x.note, 'Paid from ' + accName(x.accountId)].filter(Boolean).join(' · '), kg: 0, exp: x.amount})),
     ...s.loads.map(x => ({date: x.date, kind: 'Purchase load', desc: `${partyName('supplier', x.partyId)} · ${num(x.birds, 0)} birds`, kg: netKg(x), exp: 0})),
     ...s.drops.map(x => ({date: x.date, kind: 'Delivery', desc: `${partyName('customer', x.partyId)} · ${num(x.birds, 0)} birds`, kg: netKg(x), exp: 0})),
   ].sort((a, b) => a.date.localeCompare(b.date) || (a.exp ? 1 : 0) - (b.exp ? 1 : 0));
@@ -1025,6 +1041,108 @@ PAGES['veh-statement'] = () => {
        <div class="col-6 col-md-3">${stat('Cost per kg', s.kg ? inr(s.exp / s.kg, 2) : '—', 'expense ÷ kg moved', 'calculator')}</div></div>`
     + (byCat.length ? `<div class="d-flex flex-wrap gap-2 mb-3">${byCat.map(([c, a]) => `<span class="badge-soft b-brand">${c}: ${inr(a)}</span>`).join('')}</div>` : '')
     + dataView(cols, rows.reverse(), {foot: true, emptyMsg: 'No trips or expenses in this period.', emptyIcon: 'truck-front'});
+};
+
+/* ---------------- Cash & Bank ---------------- */
+const accOf = id => DB.accounts.find(a => a.id === id);
+const accName = id => (accOf(id) || {}).name || '—';
+const accOpts = cur => activeOpts(DB.accounts, cur, a => `${a.name} (${a.type})`);
+/* Every money movement that touches an account */
+function bookEntries(id) {
+  const rows = [];
+  DB.payments.filter(x => x.accountId === id).forEach(x => rows.push(x.partyType === 'customer'
+    ? {date: x.date, kind: 'Receipt', desc: partyName('customer', x.partyId) + (x.note ? ' · ' + x.note : ''), inn: x.amount, out: 0}
+    : {date: x.date, kind: 'Payment', desc: partyName('supplier', x.partyId) + (x.note ? ' · ' + x.note : ''), inn: 0, out: x.amount}));
+  DB.expenses.filter(x => x.accountId === id && x.amount - (x.advDeduct || 0) > 0).forEach(x => rows.push({date: x.date, kind: 'Expense',
+    desc: [x.category, x.employeeId ? empName(x.employeeId) : '', x.vehicleId ? vehName(x.vehicleId) : '', x.advDeduct ? `${inr(x.advDeduct)} adjusted from advance` : '', x.note].filter(Boolean).join(' · '), inn: 0, out: x.amount - (x.advDeduct || 0)}));
+  DB.monthly.filter(x => x.accountId === id).forEach(x => rows.push({date: x.date, kind: 'Monthly expense', desc: `${x.category} (${mLong(x.month)})` + (x.note ? ' · ' + x.note : ''), inn: 0, out: x.amount}));
+  DB.advances.filter(x => x.accountId === id).forEach(x => rows.push({date: x.date, kind: x.type === 'given' ? 'Advance' : 'Adv. recovery', desc: empName(x.employeeId) + (x.note ? ' · ' + x.note : ''), inn: x.type === 'recovered' ? x.amount : 0, out: x.type === 'given' ? x.amount : 0}));
+  DB.contra.filter(x => x.fromId === id || x.toId === id).forEach(x => rows.push(x.fromId === id
+    ? {date: x.date, kind: 'Contra', desc: `To ${accName(x.toId)}` + (x.note ? ' · ' + x.note : ''), inn: 0, out: x.amount}
+    : {date: x.date, kind: 'Contra', desc: `From ${accName(x.fromId)}` + (x.note ? ' · ' + x.note : ''), inn: x.amount, out: 0}));
+  return rows.sort((a, b) => a.date.localeCompare(b.date) || (b.inn ? 1 : 0) - (a.inn ? 1 : 0));
+}
+function accBalance(id, upto = TODAY) {
+  const a = accOf(id); if (!a) return 0;
+  const L = bookEntries(id).filter(r => r.date <= upto);
+  return a.opening + sum(L, r => r.inn) - sum(L, r => r.out);
+}
+
+PAGES.book = () => {
+  const {bkAcc: id, bkFrom: f, bkTo: t} = state.f, a = accOf(id);
+  const all = bookEntries(id);
+  const open = a.opening + sum(all.filter(r => r.date < f), r => r.inn - r.out);
+  let bal = open;
+  const rows = all.filter(r => r.date >= f && r.date <= t).map(r => ({...r, bal: (bal += r.inn - r.out)}));
+  const tIn = sum(rows, r => r.inn), tOut = sum(rows, r => r.out);
+  const badge = k => `<span class="badge-soft ${k === 'Receipt' || k === 'Adv. recovery' ? 'b-in' : k === 'Contra' ? 'b-gray' : k === 'Payment' ? 'b-brand' : 'b-out'}">${k}</span>`;
+  const cols = [
+    {h: 'Date', card: 'title', v: r => `<span class="fw-semibold">${dShort(r.date)}</span> <span class="d-md-none">${badge(r.kind)}</span>`},
+    {h: 'Type', tableOnly: true, v: r => badge(r.kind)},
+    {h: 'Particulars', card: 'sub', v: r => esc(r.desc)},
+    {h: 'Receipt (In)', mh: 'In', end: 1, tableOnly: true, v: r => r.inn ? `<span class="text-good">${inr(r.inn)}</span>` : '—', tf: inr(tIn)},
+    {h: 'Payment (Out)', mh: 'Out', end: 1, tableOnly: true, v: r => r.out ? `<span class="text-bad">${inr(r.out)}</span>` : '—', tf: inr(tOut)},
+    {h: 'Balance', end: 1, v: r => `<b>${inr(r.bal)}</b>`, tf: inr(bal)},
+    {h: 'Amount', card: 'amount', mobileOnly: true, v: r => r.inn ? `<span class="text-good">+${inr(r.inn)}</span>` : `<span class="text-bad">−${inr(r.out)}</span>`, tf: ''},
+  ];
+  const chips = DB.accounts.filter(x => x.active || x.id === id).map(x => `<button class="btn btn-sm ${x.id === id ? 'btn-brand' : 'btn-light border'} text-start" data-action="book-acc" data-id="${x.id}"><i class="bi bi-${x.type === 'Cash' ? 'cash-stack' : 'bank'} me-1"></i>${esc(x.name)} <b class="ms-1">${inr(accBalance(x.id, t))}</b></button>`).join('');
+  return head('Cash & Bank Book', `${esc(a.name)} · ${dShort(f)} – ${dShort(t)}`, `<button class="btn btn-light border d-none d-md-inline-flex align-items-center gap-1" data-action="new-contra"><i class="bi bi-arrow-left-right"></i>Contra</button>`)
+    + `<div class="d-flex flex-wrap gap-2 mb-3">${chips}</div>`
+    + rangeNav('bkFrom', 'bkTo')
+    + `<div class="row g-2 mb-3">
+       <div class="col-6 col-md-3">${stat('Opening', inr(open), dShort(f), a.type === 'Cash' ? 'cash-stack' : 'bank')}</div>
+       <div class="col-6 col-md-3">${stat('Receipts', `<span class="text-good">${inr(tIn)}</span>`, `${rows.filter(r => r.inn).length} entries`, 'arrow-down-left')}</div>
+       <div class="col-6 col-md-3">${stat('Payments', `<span class="text-bad">${inr(tOut)}</span>`, `${rows.filter(r => r.out).length} entries`, 'arrow-up-right')}</div>
+       <div class="col-6 col-md-3">${stat('Closing balance', inr(bal), dShort(t), '', 'hero')}</div></div>`
+    + dataView(cols, rows.slice().reverse(), {foot: true, emptyMsg: 'No entries in this period.', emptyIcon: 'journal-text'})
+    + `<div class="note mt-3"><i class="bi bi-info-circle me-1"></i>This book is built from customer receipts, supplier payments, daily &amp; monthly expenses, employee advances and contra entries saved against <b>${esc(a.name)}</b>.</div>`;
+};
+
+PAGES.contra = () => {
+  const {cFrom: f, cTo: t} = state.f;
+  const list = DB.contra.filter(x => x.date >= f && x.date <= t).sort((a, b) => b.date.localeCompare(a.date));
+  const cols = [
+    {h: 'Date', card: 'sub', v: r => dLong(r.date)},
+    {h: 'Transfer', card: 'title', v: r => `<span class="fw-semibold">${esc(accName(r.fromId))}</span> <i class="bi bi-arrow-right mx-1 text-muted"></i> <span class="fw-semibold">${esc(accName(r.toId))}</span>`},
+    {h: 'Type', v: r => { const a = accOf(r.fromId)?.type, b = accOf(r.toId)?.type; return `<span class="badge-soft b-gray">${a === 'Cash' && b === 'Bank' ? 'Cash deposit' : a === 'Bank' && b === 'Cash' ? 'Cash withdrawal' : 'Account transfer'}</span>`; }},
+    {h: 'Note', v: r => esc(r.note || '—')},
+    {h: 'Amount', card: 'amount', end: 1, v: r => `<b>${inr(r.amount)}</b>`, tf: inr(sum(list, x => x.amount))},
+    {h: '', card: 'actions', v: r => actBtns('contra', r.id), mv: r => mActs('contra', r.id)},
+  ];
+  return head('Contra', 'Cash deposited to bank, cash withdrawn from bank, or transfer between accounts', addBtn('new-contra', 'New contra'))
+    + rangeNav('cFrom', 'cTo')
+    + dataView(cols, list, {foot: true, emptyMsg: 'No contra entries in this period.', emptyIcon: 'arrow-left-right'})
+    + `<div class="note mt-3"><i class="bi bi-info-circle me-1"></i>Contra only moves money between your own accounts — it does not affect profit or any party balance.</div>`;
+};
+
+PAGES.accounts = () => {
+  const cols = [
+    {h: 'Account', card: 'title', v: r => `<a href="#" class="link" data-action="book-acc" data-id="${r.id}"><i class="bi bi-${r.type === 'Cash' ? 'cash-stack' : 'bank'} me-1"></i>${esc(r.name)}</a>${r.active ? '' : ' <span class="badge-soft b-out">Inactive</span>'}`},
+    {h: 'Details', card: 'sub', v: r => r.type === 'Cash' ? 'Cash' : [r.bank, r.accNo, r.ifsc].filter(Boolean).map(esc).join(' · ')},
+    {h: 'Opening', end: 1, v: r => inr(r.opening), tf: inr(sum(DB.accounts, a => a.opening))},
+    {h: 'Balance today', card: 'amount', end: 1, v: r => `<b>${inr(accBalance(r.id))}</b>`, tf: inr(sum(DB.accounts, a => accBalance(a.id)))},
+    {h: '', card: 'actions', v: r => `<div class="text-end text-nowrap"><button class="btn btn-sm btn-soft" data-action="book-acc" data-id="${r.id}">Book</button> <button class="icon-btn" data-action="edit" data-type="account" data-id="${r.id}"><i class="bi bi-pencil"></i></button></div>`,
+      mv: r => `<div class="m-actions"><button class="btn btn-sm btn-soft" data-action="book-acc" data-id="${r.id}"><i class="bi bi-journal-text me-1"></i>Book</button><button class="btn btn-sm btn-light border" data-action="edit" data-type="account" data-id="${r.id}"><i class="bi bi-pencil me-1"></i>Edit</button></div>`},
+  ];
+  return head('Cash & Bank Accounts', `Total balance ${inr(sum(DB.accounts, a => accBalance(a.id)))}`, addBtn('new-account', 'Add account'))
+    + dataView(cols, DB.accounts, {foot: true, emptyIcon: 'bank'});
+};
+
+PAGES.opening = () => {
+  const S = DB.settings;
+  const sec = (title, icon, rows, total, totLbl) => `<div class="cardx p-3 mb-3"><div class="d-flex justify-content-between align-items-center mb-2"><div class="fw-bold"><i class="bi bi-${icon} me-1" style="color:var(--brand)"></i>${title}</div><div class="small text-muted">${totLbl} <b class="text-dark">${inr(total)}</b></div></div>
+    ${rows.map(([n, v, extra]) => `<div class="d-flex justify-content-between py-2 border-top small"><span>${esc(n)}${extra ? ` <span class="text-muted">· ${extra}</span>` : ''}</span><b>${v}</b></div>`).join('') || '<div class="text-muted small">None</div>'}</div>`;
+  return head('Opening Balances', `Balances as on ${dLong(S.openDate)} — the day you start using the app`, `<button class="btn btn-brand d-none d-md-inline-flex align-items-center gap-1" data-action="edit-opening"><i class="bi bi-pencil"></i>Edit opening balances</button>`)
+    + `<button class="btn btn-brand w-100 mb-3 d-md-none" data-action="edit-opening"><i class="bi bi-pencil me-1"></i>Edit opening balances</button>`
+    + `<div class="row g-3"><div class="col-lg-6">`
+    + sec('Cash & Bank', 'bank', DB.accounts.map(a => [a.name, inr(a.opening), a.type]), sum(DB.accounts, a => a.opening), 'Total')
+    + sec('Stock (birds in hand)', 'box-seam', [['Birds', num(S.openBirds, 0)], ['Value at cost', inr(S.openBirdValue), S.openBirds ? inr(S.openBirdValue / S.openBirds, 2) + '/bird' : '']], S.openBirdValue, 'Value')
+    + sec('Employee advances', 'cash-coin', DB.employees.filter(e => e.opening).map(e => [e.name, inr(e.opening), e.designation]), sum(DB.employees, e => e.opening), 'Total')
+    + `</div><div class="col-lg-6">`
+    + sec('Customers (receivable)', 'people', DB.customers.filter(c => c.opening).map(c => [c.name, inr(c.opening), c.place]), sum(DB.customers, c => c.opening), 'Total')
+    + sec('Suppliers (payable)', 'building', DB.suppliers.filter(c => c.opening).map(c => [c.name, inr(c.opening), c.place]), sum(DB.suppliers, c => c.opening), 'Total')
+    + `</div></div>`
+    + `<div class="note"><i class="bi bi-info-circle me-1"></i>Opening balances can also be set when adding a customer, supplier, employee or account. A negative customer or supplier opening means an advance: the customer paid us in advance, or we paid the supplier in advance.</div>`;
 };
 
 /* ---------------- Form pages (jQuery Validation) ---------------- */
@@ -1058,6 +1176,16 @@ $.validator.addMethod('maxDeduct', function (v, el, id) {
   if (own && own.employeeId === f.employeeId.value) bal += own.advDeduct || 0;
   return +v <= bal;
 }, 'Cannot be more than the wage amount or the advance balance.');
+$.validator.addMethod('uniqueAcc', function (v, el, id) { return this.optional(el) || !DB.accounts.some(a => a.name.toLowerCase() === v.trim().toLowerCase() && a.id !== id); }, 'An account with this name already exists.');
+$.validator.addMethod('ifsc', function (v, el) { return this.optional(el) || /^[A-Z]{4}0[A-Z0-9]{6}$/i.test(v.trim()); }, 'Enter a valid 11-character IFSC, e.g. SBIN0001234.');
+$.validator.addMethod('cashMin', function (v, el) { return this.optional(el) || el.form.type.value !== 'Cash' || +v >= 0; }, 'Cash balance cannot be negative.');
+$.validator.addMethod('notSameAcc', function (v, el, p) { return this.optional(el) || v !== $(p).val(); }, 'From and To accounts must be different.');
+$.validator.addMethod('contraAvail', function (v, el, id) {
+  const f = el.form, a = accOf(f.fromId.value); if (this.optional(el) || !a || a.type !== 'Cash') return true;
+  const own = id ? DB.contra.find(x => x.id === id) : null; let bal = accBalance(a.id, f.date.value || TODAY);
+  if (own && own.fromId === a.id) bal += own.amount; if (own && own.toId === a.id) bal -= own.amount;
+  return +v <= bal;
+}, 'Not enough cash in this account on that date.');
 $.validator.setDefaults({
   errorElement: 'div', errorClass: 'invalid-feedback', ignore: ':hidden:not(.validate-hidden)',
   highlight: el => $(el).addClass('is-invalid'),
@@ -1162,18 +1290,18 @@ function openTxn(kind, id) {
 
 /* ----- Daily expense (wages → employee, vehicle costs → vehicle) ----- */
 function openExpense(id, preset = {}) {
-  const r = id ? DB.expenses.find(x => x.id === id) : {date: state.f.eDate, category: preset.vehicleId ? 'Diesel / Fuel' : '', amount: '', mode: 'Cash', note: '', employeeId: '', vehicleId: preset.vehicleId || '', advDeduct: 0, ...preset};
+  const r = id ? DB.expenses.find(x => x.id === id) : {date: state.f.eDate, category: preset.vehicleId ? 'Diesel / Fuel' : '', amount: '', accountId: 'a1', note: '', employeeId: '', vehicleId: preset.vehicleId || '', advDeduct: 0, ...preset};
   const linkOf = () => EXP_LINK[$('#f-category').val()];
   openForm({
     title: id ? 'Edit expense' : 'Add daily expense',
     body: `<div class="row g-3">${fld(R('Date'), inp('date', r.date, `type="date" max="${TODAY}"`), 'col-6')}${fld(R('Amount (₹)'), inp('amount', r.amount, NUM + ' placeholder="0"'), 'col-6')}
-      ${fld(R('Category'), sel('category', EXP_CATS, r.category, 'Select…'), 'col-12 col-md-6')}${fld(R('Paid by'), sel('mode', ['Cash', 'UPI', 'Bank'], r.mode), 'col-12 col-md-6')}
+      ${fld(R('Category'), sel('category', EXP_CATS, r.category, 'Select…'), 'col-12 col-md-6')}${fld(R('Paid from'), sel('accountId', accOpts(r.accountId), r.accountId, 'Select account…'), 'col-12 col-md-6')}
       <div class="col-12 col-md-6" id="empWrap">${fld(R('Employee'), sel('employeeId', activeOpts(DB.employees, r.employeeId, e => `${e.name} (${e.designation})`), r.employeeId, 'Select employee…'), '')}</div>
       <div class="col-12 col-md-6" id="dedWrap">${fld('Deduct from advance (₹)', inp('advDeduct', r.advDeduct || '', NUM + ' placeholder="0"'), '', '<span id="advInfo"></span>')}</div>
       <div class="col-12 col-md-6" id="vehWrap">${fld(R('Vehicle'), sel('vehicleId', activeOpts(DB.vehicles, r.vehicleId, v => `${v.number} (${v.type}, ${v.ownership})`), r.vehicleId, 'Select vehicle…'), '')}</div>
       ${fld('Note', inp('note', r.note, 'maxlength="120" placeholder="e.g. Tyre puncture, 2 trips"'))}</div>`,
     rules: {
-      date: dateRule(), amount: {required: true, number: true, min: 1}, category: {required: true}, mode: {required: true}, note: {maxlength: 120},
+      date: dateRule(), amount: {required: true, number: true, min: 1}, category: {required: true}, accountId: {required: true}, note: {maxlength: 120},
       employeeId: {required: () => linkOf() === 'employee'}, vehicleId: {required: () => linkOf() === 'vehicle'},
       advDeduct: {number: true, min: 0, maxDeduct: id || ''},
     },
@@ -1197,7 +1325,7 @@ function openExpense(id, preset = {}) {
     },
     onSave: d => {
       const link = EXP_LINK[d.category];
-      const rec = {date: d.date, category: d.category, amount: +d.amount, mode: d.mode, note: d.note,
+      const rec = {date: d.date, category: d.category, amount: +d.amount, accountId: d.accountId, note: d.note,
         employeeId: link === 'employee' ? d.employeeId : '', vehicleId: link === 'vehicle' ? d.vehicleId : '',
         advDeduct: link === 'employee' && !qs('#dedWrap').classList.contains('d-none') ? (+d.advDeduct || 0) : 0};
       if (id) Object.assign(r, rec); else DB.expenses.push({id: uid(), by: state.user.name, ...rec});
@@ -1251,7 +1379,7 @@ function openVehicle(id) {
 
 /* ----- Employee advance (give / recover) ----- */
 function openAdvance(type, empId, id) {
-  const r = id ? DB.advances.find(a => a.id === id) : {date: TODAY, type: type || 'given', employeeId: empId || '', amount: '', mode: 'Cash', note: ''};
+  const r = id ? DB.advances.find(a => a.id === id) : {date: TODAY, type: type || 'given', employeeId: empId || '', amount: '', accountId: 'a1', note: ''};
   openForm({
     title: id ? 'Edit advance entry' : (r.type === 'given' ? 'Give advance' : 'Recover advance'),
     sub: 'Advance is money the employee owes back — it is not an expense',
@@ -1263,17 +1391,17 @@ function openAdvance(type, empId, id) {
       ${fld(R('Employee'), sel('employeeId', activeOpts(DB.employees, r.employeeId, e => `${e.name} (${e.designation})`), r.employeeId, 'Select employee…'))}
       <div class="col-12"><div class="note py-2" id="advBal"></div></div>
       ${fld(R('Date'), inp('date', r.date, `type="date" max="${TODAY}"`), 'col-6')}${fld(R('Amount (₹)'), inp('amount', r.amount, NUM), 'col-6')}
-      ${fld(R('Mode'), sel('mode', ['Cash', 'UPI', 'Bank'], r.mode), 'col-12 col-md-6')}${fld('Note', inp('note', r.note, 'maxlength="120" placeholder="e.g. Family function"'), 'col-12 col-md-6')}</div>`,
-    rules: {type: {required: true}, employeeId: {required: true}, date: {required: true, notFuture: true}, amount: {required: true, number: true, min: 1, maxRecover: id || ''}, mode: {required: true}},
+      ${fld(R('<span id="advAccLbl">Paid from</span>'), sel('accountId', accOpts(r.accountId), r.accountId, 'Select account…'), 'col-12 col-md-6')}${fld('Note', inp('note', r.note, 'maxlength="120" placeholder="e.g. Family function"'), 'col-12 col-md-6')}</div>`,
+    rules: {type: {required: true}, employeeId: {required: true}, date: {required: true, notFuture: true}, amount: {required: true, number: true, min: 1, maxRecover: id || ''}, accountId: {required: true}},
     messages: {type: 'Choose give or recover.', employeeId: 'Select the employee.', amount: {required: 'Enter the amount.', min: 'Amount must be at least ₹1.'}},
     onInput: (e, f) => {
       const eid = f.employeeId.value, t = f.querySelector('[name=type]:checked').value;
       qs('#advBal').innerHTML = eid ? `Advance balance: <b>${inr(empAdvance(eid) - (id && r.type === 'given' ? r.amount : 0) + (id && r.type === 'recovered' ? r.amount : 0))}</b>` : 'Select employee to see advance balance';
       if (e.target.name === 'type' || e.target.name === 'employeeId') { if (f.amount.value) $('#f-amount').valid(); }
-      qs('#pageTitle') && (qs('#pageTitle').textContent = t === 'given' ? 'Give advance' : 'Recover advance');
+      qs('#advAccLbl').textContent = t === 'given' ? 'Paid from' : 'Received into';
     },
     onSave: d => {
-      const rec = {date: d.date, type: d.type, employeeId: d.employeeId, amount: +d.amount, mode: d.mode, note: d.note};
+      const rec = {date: d.date, type: d.type, employeeId: d.employeeId, amount: +d.amount, accountId: d.accountId, note: d.note};
       if (id) Object.assign(r, rec); else DB.advances.push({id: uid(), ...rec});
       toast(`${d.type === 'given' ? 'Advance' : 'Recovery'} of ${inr(+d.amount)} saved`);
     },
@@ -1282,16 +1410,18 @@ function openAdvance(type, empId, id) {
 
 /* ----- Monthly expense ----- */
 function openMonthly(id) {
-  const r = id ? DB.monthly.find(x => x.id === id) : {month: state.f.mMonth, category: '', amount: '', note: ''};
+  const r = id ? DB.monthly.find(x => x.id === id) : {month: state.f.mMonth, date: TODAY, accountId: 'a2', category: '', amount: '', note: ''};
   openForm({
     title: id ? 'Edit monthly expense' : 'Add monthly expense',
     sub: 'Deducted from the month’s profit in Monthly P&L',
     body: `<div class="row g-3">${fld(R('Month'), inp('month', r.month, `type="month" max="${monthOf(TODAY)}"`), 'col-6')}${fld(R('Amount (₹)'), inp('amount', r.amount, NUM), 'col-6')}
-      ${fld(R('Category'), sel('category', MON_CATS, r.category, 'Select…'))}${fld('Note', inp('note', r.note, 'maxlength="120"'))}</div>`,
-    rules: {month: {required: true, notFutureMonth: true}, amount: {required: true, number: true, min: 1}, category: {required: true}},
+      ${fld(R('Category'), sel('category', MON_CATS, r.category, 'Select…'))}
+      ${fld(R('Paid on'), inp('date', r.date, `type="date" max="${TODAY}"`), 'col-6')}${fld(R('Paid from'), sel('accountId', accOpts(r.accountId), r.accountId, 'Select account…'), 'col-6')}
+      ${fld('Note', inp('note', r.note, 'maxlength="120"'))}</div>`,
+    rules: {month: {required: true, notFutureMonth: true}, amount: {required: true, number: true, min: 1}, category: {required: true}, date: {required: true, notFuture: true}, accountId: {required: true}},
     messages: {month: {required: 'Select the month.'}, amount: {required: 'Enter the amount.', min: 'Amount must be at least ₹1.'}, category: 'Select a category.'},
     onSave: d => {
-      const rec = {month: d.month, category: d.category, amount: +d.amount, note: d.note};
+      const rec = {month: d.month, date: d.date, accountId: d.accountId, category: d.category, amount: +d.amount, note: d.note};
       if (id) Object.assign(r, rec); else DB.monthly.push({id: uid(), ...rec});
       state.f.mMonth = d.month; toast('Monthly expense saved');
     },
@@ -1340,12 +1470,12 @@ function openPayment(t, pid) {
     body: `<div class="row g-3">${fld(R(isS ? 'Supplier' : 'Customer'), sel('partyId', partyList(t).map(p => [p.id, p.name]), pid || '', 'Select…'))}
       <div class="col-12"><div class="note py-2" id="payBal"></div></div>
       ${fld(R('Date'), inp('date', TODAY, `type="date" max="${TODAY}"`), 'col-6')}${fld(R('Amount (₹)'), inp('amount', '', NUM), 'col-6')}
-      ${fld(R('Mode'), sel('mode', ['Cash', 'UPI', 'Bank', 'Cheque'], isS ? 'Bank' : 'Cash'), 'col-12 col-md-6')}${fld('Note', inp('note', '', 'maxlength="120"'), 'col-12 col-md-6')}</div>`,
-    rules: {partyId: {required: true}, date: {required: true, notFuture: true}, amount: {required: true, number: true, min: 1}, mode: {required: true}},
+      ${fld(R(isS ? 'Paid from' : 'Received into'), sel('accountId', accOpts(isS ? 'a2' : 'a1'), isS ? 'a2' : 'a1', 'Select account…'), 'col-12 col-md-6')}${fld('Note / reference', inp('note', '', 'maxlength="120" placeholder="Cheque no., UTR, etc."'), 'col-12 col-md-6')}</div>`,
+    rules: {partyId: {required: true}, date: {required: true, notFuture: true}, amount: {required: true, number: true, min: 1}, accountId: {required: true}},
     messages: {partyId: `Select the ${t}.`, amount: {required: 'Enter the amount.', min: 'Amount must be at least ₹1.'}},
     onInput: (e, f) => { const id = f.partyId.value; qs('#payBal').innerHTML = id ? `Current ${isS ? 'payable' : 'due'}: <b>${inr(partyBalance(t, id))}</b>` : `Select ${t} to see balance`; },
     onSave: d => {
-      DB.payments.push({id: uid(), date: d.date, partyType: t, partyId: d.partyId, amount: +d.amount, mode: d.mode, note: d.note});
+      DB.payments.push({id: uid(), date: d.date, partyType: t, partyId: d.partyId, amount: +d.amount, accountId: d.accountId, note: d.note});
       toast(`${isS ? 'Payment' : 'Receipt'} of ${inr(+d.amount)} saved`);
     },
   });
@@ -1396,8 +1526,95 @@ function openUser(id) {
   });
 }
 
+/* ----- Cash / Bank account master ----- */
+function openAccount(id) {
+  const r = id ? accOf(id) : {name: '', type: 'Bank', bank: '', accNo: '', ifsc: '', opening: 0, active: true};
+  openForm({
+    title: id ? 'Edit account' : 'Add cash / bank account',
+    body: `<div class="row g-3">${fld(R('Account name'), inp('name', r.name, 'maxlength="40" placeholder="e.g. SBI Current A/c, Shop Cash"'), 'col-12 col-md-8')}${fld(R('Type'), sel('type', ['Cash', 'Bank'], r.type), 'col-12 col-md-4')}
+      <div class="col-12" id="bankWrap"><div class="row g-3">${fld(R('Bank name'), inp('bank', r.bank, 'maxlength="40"'), 'col-12 col-md-4')}${fld('Account number', inp('accNo', r.accNo, 'maxlength="20"'), 'col-6 col-md-4')}${fld('IFSC', inp('ifsc', r.ifsc, 'maxlength="11" style="text-transform:uppercase" placeholder="SBIN0001234"'), 'col-6 col-md-4')}</div></div>
+      ${fld(R('Opening balance (₹)'), inp('opening', r.opening, NUM), 'col-12 col-md-6', `As on ${dLong(DB.settings.openDate)}`)}
+      <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="active" id="aActive" ${r.active ? 'checked' : ''}><label class="form-check-label" for="aActive">Active (shows in payment lists)</label></div></div></div>`,
+    rules: {name: {required: true, minlength: 2, uniqueAcc: id || ''}, type: {required: true}, bank: {required: true}, ifsc: {ifsc: true}, opening: {required: true, number: true, cashMin: true}},
+    messages: {name: {required: 'Enter the account name.'}, bank: 'Enter the bank name.', opening: {required: 'Enter the opening balance (0 if none).'}},
+    onInput: (e, f) => qs('#bankWrap').classList.toggle('d-none', f.type.value !== 'Bank'),
+    onSave: d => {
+      const isB = d.type === 'Bank';
+      const rec = {name: d.name.trim(), type: d.type, bank: isB ? d.bank.trim() : '', accNo: isB ? d.accNo.trim() : '', ifsc: isB ? d.ifsc.trim().toUpperCase() : '', opening: +d.opening || 0, active: !!d.active};
+      if (id) Object.assign(r, rec); else DB.accounts.push({id: uid(), ...rec});
+      toast('Account saved');
+    },
+  });
+}
+
+/* ----- Contra (transfer between own accounts) ----- */
+function openContra(id) {
+  const cash = DB.accounts.find(a => a.type === 'Cash' && a.active), bank = DB.accounts.find(a => a.type === 'Bank' && a.active);
+  const r = id ? DB.contra.find(x => x.id === id) : {date: TODAY, fromId: cash?.id || '', toId: bank?.id || '', amount: '', note: ''};
+  openForm({
+    title: id ? 'Edit contra' : 'New contra entry',
+    sub: 'Move money between your own cash and bank accounts',
+    body: `<div class="row g-3">${fld(R('Date'), inp('date', r.date, `type="date" max="${TODAY}"`), 'col-6')}${fld(R('Amount (₹)'), inp('amount', r.amount, NUM), 'col-6')}
+      ${fld(R('From account'), sel('fromId', accOpts(r.fromId), r.fromId, 'Select…'), 'col-12 col-md-6', '<span id="fromBal"></span>')}
+      ${fld(R('To account'), sel('toId', accOpts(r.toId), r.toId, 'Select…'), 'col-12 col-md-6', '<span id="toBal"></span>')}
+      <div class="col-12"><button type="button" class="btn btn-sm btn-light border" id="swapAcc"><i class="bi bi-arrow-down-up me-1"></i>Swap</button> <span class="small text-muted ms-2" id="contraKind"></span></div>
+      ${fld('Note', inp('note', r.note, 'maxlength="120" placeholder="e.g. Deposited at SBI branch, slip no."'))}</div>`,
+    rules: {date: {required: true, notFuture: true}, amount: {required: true, number: true, min: 1, contraAvail: id || ''}, fromId: {required: true}, toId: {required: true, notSameAcc: '#f-fromId'}},
+    messages: {amount: {required: 'Enter the amount.', min: 'Amount must be at least ₹1.'}, fromId: 'Select the account money goes out of.', toId: {required: 'Select the account money goes into.'}},
+    onInput: (e, f) => {
+      const own = id ? r : null, d = f.date.value || TODAY;
+      const bal = aid => accBalance(aid, d) + (own && own.fromId === aid ? own.amount : 0) - (own && own.toId === aid ? own.amount : 0);
+      qs('#fromBal').textContent = f.fromId.value ? `Balance ${inr(bal(f.fromId.value))}` : '';
+      qs('#toBal').textContent = f.toId.value ? `Balance ${inr(bal(f.toId.value))}` : '';
+      const a = accOf(f.fromId.value)?.type, b = accOf(f.toId.value)?.type;
+      qs('#contraKind').textContent = a && b ? (a === 'Cash' && b === 'Bank' ? 'Cash deposit into bank' : a === 'Bank' && b === 'Cash' ? 'Cash withdrawal from bank' : 'Transfer between accounts') : '';
+      if (['fromId', 'toId', 'date'].includes(e.target.name)) { if (f.toId.value) $('#f-toId').valid(); if (f.amount.value) $('#f-amount').valid(); }
+    },
+    onSave: d => {
+      const rec = {date: d.date, fromId: d.fromId, toId: d.toId, amount: +d.amount, note: d.note};
+      if (id) Object.assign(r, rec); else DB.contra.push({id: uid(), ...rec});
+      toast(`Contra saved · ${accName(d.fromId)} → ${accName(d.toId)}`);
+    },
+  });
+  qs('#swapAcc').addEventListener('click', () => { const f = qs('#entryForm'), a = f.fromId.value; f.fromId.value = f.toId.value; f.toId.value = a; $(f.toId).trigger('change'); });
+}
+
+/* ----- Opening balances (one screen for the whole system) ----- */
+function openOpening() {
+  const S = DB.settings;
+  const row = (label, name, val, extra = '') => `<div class="col-12 col-md-6"><div class="d-flex align-items-start gap-2"><label class="form-label flex-grow-1 mt-2 mb-0" for="f-${name}">${esc(label)}${extra ? `<span class="d-block text-muted fw-normal" style="font-size:.72rem">${extra}</span>` : ''}</label><div style="width:150px">${inp(name, val, NUM + ' style="text-align:right"')}</div></div></div>`;
+  const group = (t, inner) => `<div class="col-12"><div class="fw-bold border-bottom pb-1 mt-2">${t}</div></div>${inner}`;
+  const rules = {openDate: {required: true, notFuture: true}, openBirds: {required: true, digits: true}, openBirdValue: {required: true, number: true, min: 0}};
+  DB.accounts.forEach(a => rules['acc_' + a.id] = {required: true, number: true, ...(a.type === 'Cash' ? {min: 0} : {})});
+  DB.customers.forEach(c => rules['cus_' + c.id] = {required: true, number: true});
+  DB.suppliers.forEach(c => rules['sup_' + c.id] = {required: true, number: true});
+  DB.employees.forEach(e => rules['emp_' + e.id] = {required: true, number: true, min: 0});
+  const msgs = {openBirds: {digits: 'Enter a whole number of birds.'}, openBirdValue: {min: 'Cannot be negative.'}};
+  Object.keys(rules).forEach(k => { if (/^(acc|cus|sup|emp)_/.test(k)) msgs[k] = {required: 'Enter 0 if there is no balance.', number: 'Enter a valid amount.', min: k.startsWith('acc_') ? 'Cash balance cannot be negative.' : 'Cannot be negative.'}; });
+  openForm({
+    title: 'Edit opening balances', sub: 'Enter 0 where there is no balance',
+    body: `<div class="row g-3">${fld(R('Opening balances as on'), inp('openDate', S.openDate, `type="date" max="${TODAY}"`), 'col-12 col-md-6', 'Normally the day you start entering daily transactions')}
+      ${group('<i class="bi bi-bank me-1"></i>Cash & Bank', DB.accounts.map(a => row(a.name, 'acc_' + a.id, a.opening, a.type === 'Cash' ? 'Cash in hand' : a.bank)).join(''))}
+      ${group('<i class="bi bi-box-seam me-1"></i>Stock in hand', row('Birds in hand', 'openBirds', S.openBirds, 'Unsold birds on the opening date') + row('Value of those birds (₹)', 'openBirdValue', S.openBirdValue, 'At purchase cost'))}
+      ${group('<i class="bi bi-people me-1"></i>Customers — amount they owe us', DB.customers.map(c => row(c.name, 'cus_' + c.id, c.opening, c.place)).join(''))}
+      ${group('<i class="bi bi-building me-1"></i>Suppliers — amount we owe them', DB.suppliers.map(c => row(c.name, 'sup_' + c.id, c.opening, c.place)).join(''))}
+      ${group('<i class="bi bi-cash-coin me-1"></i>Employee advances pending', DB.employees.map(e => row(e.name, 'emp_' + e.id, e.opening, e.designation)).join(''))}</div>`,
+    rules,
+    messages: msgs,
+    save: 'Save opening balances',
+    onSave: d => {
+      S.openDate = d.openDate; S.openBirds = +d.openBirds || 0; S.openBirdValue = +d.openBirdValue || 0;
+      DB.accounts.forEach(a => a.opening = +d['acc_' + a.id] || 0);
+      DB.customers.forEach(c => c.opening = +d['cus_' + c.id] || 0);
+      DB.suppliers.forEach(c => c.opening = +d['sup_' + c.id] || 0);
+      DB.employees.forEach(e => e.opening = +d['emp_' + e.id] || 0);
+      toast('Opening balances saved');
+    },
+  });
+}
+
 /* Delete */
-const COLL = {purchase: 'purchases', sale: 'sales', expense: 'expenses', monthly: 'monthly', journal: 'journal', user: 'users', advance: 'advances'};
+const COLL = {contra: 'contra', purchase: 'purchases', sale: 'sales', expense: 'expenses', monthly: 'monthly', journal: 'journal', user: 'users', advance: 'advances'};
 let pendingDel = null;
 function askDelete(type, id) {
   pendingDel = {type, id};
@@ -1429,6 +1646,10 @@ document.addEventListener('click', e => {
     case 'new-sale': openTxn('sale'); break;
     case 'new-expense': openExpense(null, type === 'vehicle' ? {vehicleId: id || state.vst?.id} : {}); break;
     case 'new-employee': openEmployee(); break;
+    case 'new-account': openAccount(); break;
+    case 'new-contra': openContra(); break;
+    case 'edit-opening': openOpening(); break;
+    case 'book-acc': state.f.bkAcc = id; go('book'); break;
     case 'new-vehicle': openVehicle(); break;
     case 'new-advance': openAdvance(type || 'given', id || (state.page === 'emp-statement' ? state.est?.id : '')); break;
     case 'est': state.est = {id, from: monthOf(TODAY) + '-01', to: TODAY}; go('emp-statement'); break;
@@ -1441,7 +1662,7 @@ document.addEventListener('click', e => {
     case 'stmt': state.stmt = {type, id, from: monthOf(TODAY) + '-01', to: TODAY}; go('statement'); break;
     case 'open-day': state.f.plDate = a.dataset.d; go('pl-daily'); break;
     case 'edit':
-      ({purchase: () => openTxn('purchase', id), sale: () => openTxn('sale', id), expense: () => openExpense(id), monthly: () => openMonthly(id), journal: () => openJournal(id), user: () => openUser(id), supplier: () => openParty('supplier', id), customer: () => openParty('customer', id), employee: () => openEmployee(id), vehicle: () => openVehicle(id), advance: () => openAdvance(null, null, id)})[type]();
+      ({purchase: () => openTxn('purchase', id), sale: () => openTxn('sale', id), expense: () => openExpense(id), monthly: () => openMonthly(id), journal: () => openJournal(id), user: () => openUser(id), supplier: () => openParty('supplier', id), customer: () => openParty('customer', id), employee: () => openEmployee(id), vehicle: () => openVehicle(id), account: () => openAccount(id), contra: () => openContra(id), advance: () => openAdvance(null, null, id)})[type]();
       break;
     case 'del': askDelete(type, id); break;
     case 'form-cancel': closeForm(); break;
